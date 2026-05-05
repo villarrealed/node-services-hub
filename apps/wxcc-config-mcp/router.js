@@ -97,7 +97,8 @@ async function loadFromUpstash() {
     const data = await res.json();
     if (data.result) {
       const parsed = JSON.parse(data.result);
-      console.log("[wxcc] Loaded token store from Upstash, expires at", new Date(parsed.expiresAt).toISOString());
+      const expiresLabel = parsed.expiresAt ? new Date(parsed.expiresAt).toISOString() : "unknown";
+      console.log("[wxcc] Loaded token store from Upstash, expires at", expiresLabel);
       return parsed;
     }
   } catch (e) {
