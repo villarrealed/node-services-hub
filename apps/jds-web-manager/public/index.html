@@ -1,0 +1,4066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JDS Web Manager</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #1f6feb;
+    --accent-hover: #388bfd;
+    --success: #3fb950;
+    --warning: #d29922;
+    --danger: #f85149;
+    --channel-web: #58a6ff;
+    --channel-email: #bc8cff;
+    --channel-sms: #3fb950;
+    --channel-chat: #ffa657;
+    --channel-telephony: #f85149;
+    --channel-social: #e8b260;
+    --channel-custom: #8b949e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Layout */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-header { padding: 20px 16px 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-header h1 { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.5px; }
+  .sidebar-header p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+  .nav-section { padding: 8px 16px 4px; font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.8px; text-transform: uppercase; }
+  nav a { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; color: var(--text-muted); text-decoration: none; cursor: pointer; border-left: 2px solid transparent; transition: all 0.15s; }
+  nav a:hover { color: var(--text); background: var(--surface2); }
+  nav a.active { color: var(--accent-hover); border-left-color: var(--accent); background: rgba(31,111,235,0.1); }
+  nav a .icon { width: 16px; text-align: center; font-size: 14px; }
+  .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .settings-btn { width: 100%; padding: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.15s; }
+  .settings-btn:hover { color: var(--text); border-color: var(--accent); }
+  .config-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex-shrink: 0; margin-left: auto; }
+  .config-dot.ok { background: var(--success); }
+
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .page { display: none; flex-direction: column; height: 100%; }
+  .page.active { display: flex; }
+  .page-header { padding: 20px 28px 0; flex-shrink: 0; }
+  .page-header h2 { font-size: 20px; font-weight: 600; }
+  .page-header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .page-body { padding: 20px 28px; flex: 1; overflow-y: auto; }
+
+  /* Cards & Forms */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-row.single { grid-template-columns: 1fr; }
+  .form-row.triple { grid-template-columns: 1fr 1fr 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  input, select, textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 13px; width: 100%; transition: border-color 0.15s; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 80px; }
+  select option { background: var(--surface2); }
+
+  /* Buttons */
+  .btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent-hover); }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover { background: rgba(248,81,73,0.1); }
+  .btn-success { background: var(--success); color: #000; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+  /* Alerts */
+  .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+  .alert-success { background: rgba(63,185,80,0.15); border: 1px solid rgba(63,185,80,0.4); color: var(--success); }
+  .alert-error { background: rgba(248,81,73,0.15); border: 1px solid rgba(248,81,73,0.4); color: var(--danger); }
+  .alert-info { background: rgba(31,111,235,0.15); border: 1px solid rgba(31,111,235,0.4); color: var(--accent-hover); }
+  .alert-warning { background: rgba(210,153,34,0.15); border: 1px solid rgba(210,153,34,0.4); color: var(--warning); }
+
+  /* Person card */
+  .person-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .person-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .person-id { font-size: 11px; color: var(--text-muted); font-family: monospace; margin-bottom: 12px; }
+  .alias-group { margin-bottom: 10px; }
+  .alias-group-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .alias-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 12px; margin: 2px; }
+  .alias-tag .remove { color: var(--danger); cursor: pointer; font-size: 14px; line-height: 1; }
+
+
+  /* Channel color classes */
+  .ch-web { background: rgba(88,166,255,0.2); color: var(--channel-web); }
+  .ch-email { background: rgba(188,140,255,0.2); color: var(--channel-email); }
+  .ch-sms { background: rgba(63,185,80,0.2); color: var(--channel-sms); }
+  .ch-chat { background: rgba(255,166,87,0.2); color: var(--channel-chat); }
+  .ch-telephony { background: rgba(248,81,73,0.2); color: var(--channel-telephony); }
+  .ch-social { background: rgba(232,178,96,0.2); color: var(--channel-social); }
+  .ch-custom { background: rgba(139,148,158,0.2); color: var(--channel-custom); }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+  .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { font-size: 16px; font-weight: 600; }
+  .modal-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px; line-height: 1; padding: 2px; }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .badge-web { background: rgba(88,166,255,0.2); color: var(--channel-web); }
+  .badge-email { background: rgba(188,140,255,0.2); color: var(--channel-email); }
+  .badge-sms { background: rgba(63,185,80,0.2); color: var(--channel-sms); }
+  .badge-chat { background: rgba(255,166,87,0.2); color: var(--channel-chat); }
+  .badge-telephony { background: rgba(248,81,73,0.2); color: var(--channel-telephony); }
+  .badge-social { background: rgba(232,178,96,0.2); color: var(--channel-social); }
+  .badge-custom { background: rgba(139,148,158,0.2); color: var(--channel-custom); }
+
+  /* Loading spinner */
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Empty state */
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+  .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+  .empty-state p { font-size: 14px; }
+
+  /* Search bar */
+  .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .search-bar input { flex: 1; }
+
+  /* Tag input */
+  .tag-input-wrapper { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; min-height: 38px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; cursor: text; }
+  .tag-input-wrapper:focus-within { border-color: var(--accent); }
+  .tag-input-wrapper input { border: none; background: transparent; color: var(--text); font-size: 13px; padding: 3px 4px; flex: 1; min-width: 120px; }
+  .tag-input-wrapper input:focus { outline: none; }
+
+  /* Settings */
+  .settings-section { margin-bottom: 24px; }
+  .settings-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .token-display { font-family: monospace; font-size: 11px; color: var(--text-muted); word-break: break-all; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* Recent identity dropdown */
+  .identity-wrapper { position: relative; }
+  .identity-dropdown { display: none; position: fixed; background: var(--surface2); border: 1px solid var(--accent); border-radius: 6px; z-index: 9999; max-height: 220px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); min-width: 240px; }
+  .identity-dropdown.open { display: block; }
+  .identity-dropdown-header { padding: 5px 10px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .identity-dropdown-header button { background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 0; }
+  .identity-dropdown-header button:hover { color: var(--danger); }
+  .identity-option { padding: 7px 10px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .identity-option:hover { background: rgba(31,111,235,0.15); color: var(--accent-hover); }
+  .identity-option .identity-remove { margin-left: auto; color: var(--text-muted); font-size: 14px; padding: 0 2px; }
+  .identity-option .identity-remove:hover { color: var(--danger); }
+
+
+  /* ── Journey Timeline Prototype ────────────────────────────────── */
+  .proto-header-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 24px; margin-bottom: 16px;
+  }
+  .proto-header-card h3 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+  .proto-header-card p  { font-size: 13px; color: var(--text-muted); margin: 0; }
+  .proto-metrics {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px;
+  }
+  @media (max-width: 700px) { .proto-metrics { grid-template-columns: repeat(2, 1fr); } }
+  .proto-metric {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px;
+  }
+  .proto-metric-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .proto-metric-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+
+  /* main layout: left column (header + timeline + minimap), right aside (detail panel) */
+  .proto-body { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .proto-body { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) {
+    .sidebar { width: 48px; }
+    .sidebar-header p, .sidebar-header h1, nav a span, .settings-btn span { display: none; }
+    nav a { justify-content: center; padding: 10px; }
+    .page-body { padding: 16px; }
+    .form-row { grid-template-columns: 1fr; }
+    .form-row.triple { grid-template-columns: 1fr; }
+  }
+  /* Left column — flex column so all children share the same width */
+  .proto-body-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; overflow: hidden; }
+
+  /* Header card sits at the top of the left column */
+  .proto-header-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 24px;
+  }
+
+  /* ── Unified horizontal timeline grid ─────────────────────────── */
+  /* Constrained to the left column — never wider than parent, scrolls internally */
+  .proto-tl-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; display: flex; flex-direction: column;
+    max-height: 480px; overflow: hidden; width: 100%; min-width: 0;
+  }
+  .proto-tl-wrap h4 { font-size: 15px; font-weight: 700; margin: 0; padding: 14px 16px 0; flex-shrink: 0; }
+  .proto-tl-wrap > p { font-size: 12px; color: var(--text-muted); margin: 2px 0 0; padding: 0 16px 10px; flex-shrink: 0; }
+
+  /* Scrollable viewport — both axes, fills remaining height inside the card */
+  .proto-tl-scroll {
+    overflow: auto;
+    flex: 1; min-height: 0;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .proto-tl-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .proto-tl-scroll::-webkit-scrollbar-track { background: transparent; }
+  .proto-tl-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* The grid table — CSS grid where col 0 is fixed-width (label) and cols 1..N are time columns */
+  .proto-tl-grid {
+    display: grid;
+    /* columns set dynamically via inline style */
+    min-width: max-content;
+  }
+
+  /* ── Axis rows ─────────────────────────────────────────────── */
+  .proto-axis-date-row,
+  .proto-axis-time-row {
+    display: contents; /* children participate in parent grid */
+  }
+
+  /* corner cell (top-left, spans date + time axis rows, sticky) */
+  .proto-corner {
+    position: sticky; left: 0; z-index: 4;
+    background: var(--surface2); border-right: 2px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    grid-column: 1; grid-row: 1 / 3; /* spans both axis rows */
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 0 10px; min-width: 120px;
+  }
+
+  /* Date bucket cell */
+  .proto-axis-date {
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    padding: 6px 10px; font-size: 11px; font-weight: 700;
+    color: var(--text); white-space: nowrap;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .proto-axis-date:first-of-type { border-left: none; }
+
+  /* Time tick cell */
+  .proto-axis-time {
+    background: var(--surface); border-bottom: 2px solid var(--border);
+    border-right: 1px solid var(--border);
+    padding: 4px 8px; font-size: 10px; font-weight: 700;
+    color: var(--text-muted); white-space: nowrap; min-width: 100px;
+    cursor: pointer; user-select: none; transition: background 0.15s;
+  }
+  .proto-axis-time:hover { background: var(--surface2); color: var(--primary); }
+  .proto-axis-date { cursor: pointer; }
+  .proto-axis-date:hover { filter: brightness(1.08); }
+
+  /* ── Channel label — toggle button ───────────────────────── */
+  .proto-ch-label {
+    position: sticky; left: 0; z-index: 3;
+    background: var(--surface2); border-right: 2px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 12px; font-size: 12px; font-weight: 600;
+    display: flex; align-items: flex-start; gap: 6px; white-space: nowrap;
+    min-width: 120px; cursor: pointer; user-select: none;
+    transition: background 0.15s;
+  }
+  .proto-ch-label:hover { background: var(--surface3, var(--border)); }
+  .proto-ch-toggle { font-size: 9px; margin-top: 2px; opacity: 0.6; flex-shrink: 0; }
+
+  /* Collapsed cell — fixed compact height, shows pip dots */
+  .proto-cell-collapsed {
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 0 6px; min-width: 100px; height: 28px;
+    display: flex; align-items: center; gap: 4px;
+    background: var(--surface);
+  }
+  .proto-cell-collapsed.proto-cell-stripe { background: var(--surface2); }
+
+  /* Pip dot — event indicator in collapsed row */
+  .proto-pip {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+    transition: transform 0.15s; position: relative;
+  }
+  .proto-pip:hover { transform: scale(1.5); }
+  .proto-pip.selected { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  /* Shared fixed-position pip tooltip — positioned via JS, escapes all overflow clipping */
+  #pip-tooltip-overlay {
+    display: none; position: fixed; z-index: 9999;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 11px; min-width: 180px; max-width: 260px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.28);
+    pointer-events: none; white-space: nowrap;
+  }
+  #pip-tooltip-overlay.visible { display: block; }
+  #pip-tooltip-overlay::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--border);
+  }
+  #pip-tooltip-overlay::before {
+    content: ''; position: absolute; top: calc(100% - 1px); left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--surface); z-index: 1;
+  }
+  .pip-tt-time   { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .pip-tt-title  { font-size: 12px; color: var(--text); white-space: normal; line-height: 1.4; margin-bottom: 3px; }
+  .pip-tt-type   { font-size: 10px; color: var(--text-muted); }
+  .pip-tt-hint   { font-size: 10px; color: var(--primary); margin-top: 5px; font-style: italic; }
+
+  /* Event cell — one per (channel × time-slot) */
+  .proto-cell {
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 6px; display: flex; flex-direction: column; gap: 5px;
+    min-width: 100px; vertical-align: top; background: var(--surface);
+    position: relative;
+  }
+  .proto-cell.proto-cell-stripe { background: var(--surface2); }
+
+  /* Event card inside a cell */
+  .proto-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 9px; cursor: pointer;
+    transition: border-color 0.12s, box-shadow 0.12s; font-size: 11px;
+  }
+  .proto-card:hover { border-color: var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+  .proto-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .proto-card-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px; }
+  .proto-card-time { font-size: 10px; font-weight: 700; color: var(--text-muted); }
+  .proto-card-title { font-size: 11px; font-weight: 600; line-height: 1.4; color: var(--text); }
+  .proto-outcome-badge {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 9px; font-weight: 600; padding: 1px 6px;
+    border-radius: 99px; border: 1px solid; white-space: nowrap;
+  }
+  .proto-outcome-badge.positive { background: rgba(16,185,129,0.1); color: #10b981; border-color: rgba(16,185,129,0.3); }
+  .proto-outcome-badge.negative { background: rgba(239,68,68,0.1);  color: #ef4444; border-color: rgba(239,68,68,0.3); }
+  .proto-outcome-badge.neutral  { background: var(--surface2); color: var(--text-muted); border-color: var(--border); }
+
+  /* Right-hand aside */
+  .proto-aside { display: flex; flex-direction: column; gap: 16px; }
+  .proto-detail-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .proto-detail-card h4 { font-size: 15px; font-weight: 700; margin: 0 0 12px; }
+  .proto-detail-inner {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+  }
+  .proto-detail-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .proto-detail-title { font-size: 15px; font-weight: 700; margin: 8px 0 6px; }
+  .proto-detail-desc  { font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 10px; }
+  .proto-detail-meta  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .proto-detail-meta-cell {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px;
+  }
+  .proto-detail-meta-cell dt { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+  .proto-detail-meta-cell dd { font-size: 13px; font-weight: 700; margin: 3px 0 0; }
+  .proto-rules-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .proto-rules-card h4 { font-size: 14px; font-weight: 700; margin: 0 0 10px; }
+  .proto-rules-card ul { margin: 0; padding: 0 0 0 14px; font-size: 12px; color: var(--text-muted); line-height: 1.9; }
+  .proto-rules-card ul li strong { color: var(--text); }
+  .proto-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; }
+
+  /* minimap */
+  .proto-minimap-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px;
+    width: 100%; min-width: 0; box-sizing: border-box;
+    position: relative;
+  }
+  .proto-minimap-wrap h4 { font-size: 13px; font-weight: 700; margin: 0 0 10px; }
+  .proto-minimap {
+    position: relative; height: 28px; border-radius: 8px; overflow: visible;
+    display: flex; gap: 1px; background: var(--surface2);
+    border: 1px solid var(--border);
+    clip-path: none;
+  }
+  /* clip only the colored bars, not the tooltip */
+  .proto-minimap::before {
+    content: ''; position: absolute; inset: 0;
+    border-radius: 8px; pointer-events: none;
+    box-shadow: inset 0 0 0 1px var(--border);
+    z-index: 1;
+  }
+  .proto-minimap-seg {
+    flex: 1; height: 100%; cursor: pointer; transition: filter 0.1s, opacity 0.1s;
+    opacity: 0.65; position: relative; overflow: visible;
+  }
+  .proto-minimap-seg:hover { opacity: 1; filter: brightness(1.2); }
+  .proto-minimap-seg.mm-active {
+    opacity: 1; outline: 2px solid var(--accent); outline-offset: -2px;
+  }
+  /* tooltip */
+  .proto-minimap-seg .mm-tooltip {
+    display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px; min-width: 160px; max-width: 240px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18); z-index: 100;
+    pointer-events: none; white-space: nowrap;
+  }
+  .proto-minimap-seg:hover .mm-tooltip { display: block; }
+  .mm-tooltip-date { font-size: 10px; color: var(--text-muted); font-weight: 600; margin-bottom: 2px; }
+  .mm-tooltip-time { font-size: 11px; color: var(--text); font-weight: 700; margin-bottom: 4px; }
+  .mm-tooltip-event { font-size: 11px; color: var(--text); white-space: normal; line-height: 1.4; }
+  .mm-tooltip-ch { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+  /* arrow */
+  .proto-minimap-seg .mm-tooltip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--border);
+  }
+  .proto-minimap-seg .mm-tooltip::before {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 4px solid transparent; border-top-color: var(--surface); z-index: 1;
+    margin-top: -1px;
+  }
+  .proto-minimap-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; font-size: 11px;
+  }
+  .proto-minimap-legend-item { display: flex; align-items: center; gap: 5px; }
+  .proto-minimap-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+
+
+  /* ── Profile Template Builder ───────────────────────────────────── */
+  .tpb-shell {
+    display: grid;
+    grid-template-columns: 220px 1fr 340px;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Library */
+  .tpb-library {
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .tpb-library-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 14px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #tpb-library-list { flex: 1; overflow-y: auto; padding: 10px 10px; }
+  .tpb-lib-card {
+    display: flex; flex-direction: row; align-items: center; gap: 6px;
+    width: 100%; text-align: left; padding: 11px 12px; margin-bottom: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; cursor: default; transition: border-color 0.15s;
+    color: var(--text);
+  }
+  .tpb-lib-card:hover { border-color: var(--accent); }
+  .tpb-lib-card.active { border-color: var(--accent); background: rgba(31,111,235,0.1); }
+  .tpb-lib-card-name { font-size: 12px; font-weight: 600; display: block; }
+  .tpb-lib-card-sub  { font-size: 10px; color: var(--text-muted); display: block; }
+
+  /* Builder centre */
+  .tpb-builder {
+    display: flex; flex-direction: column; overflow-y: auto; padding: 20px 24px;
+    gap: 0;
+  }
+  .tpb-builder-header { margin-bottom: 16px; flex-shrink: 0; }
+  .tpb-page-title { font-size: 18px; font-weight: 700; }
+
+  /* Cards */
+  .tpb-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px; margin-bottom: 14px;
+  }
+  .tpb-card-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .tpb-card-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 12px;
+  }
+  .tpb-card-header .tpb-card-title { margin-bottom: 0; }
+
+  /* Form grid */
+  .tpb-form-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
+  }
+  .tpb-form-group { display: flex; flex-direction: column; gap: 4px; }
+  .tpb-span2 { grid-column: span 2; }
+  .tpb-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .tpb-input {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); padding: 7px 9px;
+    font-size: 12px; font-family: inherit; transition: border-color 0.15s;
+  }
+  .tpb-input:focus { outline: none; border-color: var(--accent); }
+  .tpb-textarea { resize: vertical; min-height: 60px; }
+  .tpb-field-actions { display: flex; align-items: flex-end; padding-bottom: 2px; }
+
+  /* Field list items */
+  .tpb-field-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; margin-bottom: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; transition: border-color 0.15s;
+  }
+  .tpb-field-item:hover { border-color: var(--accent); }
+  .tpb-field-item.active { border-color: var(--accent); background: rgba(31,111,235,0.1); }
+  .tpb-field-item-body { flex: 1; min-width: 0; }
+  .tpb-field-item-label { font-size: 12px; font-weight: 600; }
+  .tpb-field-item-meta  { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .tpb-drag-handle {
+    font-size: 14px; color: var(--text-muted); cursor: grab; flex-shrink: 0;
+    line-height: 1; padding: 0 2px;
+  }
+  .tpb-field-order-badge {
+    font-size: 10px; font-weight: 700; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; color: var(--text-muted); flex-shrink: 0;
+  }
+
+  /* Footer */
+  .tpb-footer {
+    display: flex; justify-content: flex-end; gap: 10px;
+    padding: 4px 0 8px; flex-shrink: 0;
+  }
+
+  /* Preview panel */
+  .tpb-preview {
+    background: var(--surface); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .tpb-preview-tabs {
+    display: flex; gap: 4px; padding: 12px 14px 0; flex-shrink: 0;
+    border-bottom: 1px solid var(--border); padding-bottom: 0;
+  }
+  .tpb-tab {
+    padding: 7px 14px; font-size: 12px; font-weight: 600;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--text-muted); cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  }
+  .tpb-tab:hover { color: var(--text); }
+  .tpb-tab.active { color: var(--accent-hover); border-bottom-color: var(--accent); }
+  .tpb-pane { flex: 1; overflow-y: auto; padding: 14px; }
+  .tpb-preview-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .tpb-preview-row:last-child { border-bottom: none; }
+  .tpb-preview-label { color: var(--text-muted); }
+  .tpb-preview-value { font-weight: 700; color: var(--text); }
+  .tpb-json-box {
+    background: var(--surface2); color: var(--accent-hover);
+    border-radius: 8px; padding: 14px; overflow: auto;
+    font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+    border: 1px solid var(--border);
+  }
+  .tpb-issue {
+    padding: 10px 12px; border-radius: 7px; margin-bottom: 8px; font-size: 12px;
+  }
+  .tpb-issue-error   { background: rgba(248,81,73,0.1);  border: 1px solid rgba(248,81,73,0.35);  color: var(--danger); }
+  .tpb-issue-warning { background: rgba(210,153,34,0.1); border: 1px solid rgba(210,153,34,0.35); color: var(--warning); }
+  .tpb-issue-severity { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .tpb-issue-path    { font-size: 10px; font-family: monospace; opacity: 0.8; margin: 2px 0; }
+  .tpb-issue-msg     { margin: 0; }
+  .tpb-section-title { font-size: 13px; font-weight: 700; }
+  .tpb-api-ready     { color: var(--success); font-size: 12px; font-weight: 600; }
+  .tpb-api-notready  { color: var(--danger);  font-size: 12px; font-weight: 600; }
+
+  /* ── Field Editor sections ───────────────────────────────────────── */
+  .tpb-fe-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:12px; }
+  .tpb-fe-title  { font-size:15px; font-weight:700; }
+  .tpb-fe-key    { font-size:10px; font-family:monospace; color:var(--text-muted); margin-top:2px; }
+  .tpb-fe-badge  { font-size:11px; font-weight:600; padding:3px 10px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+  .tpb-fe-badge-ok  { background:rgba(63,185,80,0.15);  color:var(--success); border:1px solid rgba(63,185,80,0.35); }
+  .tpb-fe-badge-err { background:rgba(248,81,73,0.15);  color:var(--danger);  border:1px solid rgba(248,81,73,0.35); }
+  details.tpb-fe-section { margin-bottom:12px; }
+  details.tpb-fe-section > summary {
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px;
+    color:var(--text-muted); cursor:pointer; padding:6px 0 6px;
+    border-bottom:1px solid var(--border); margin-bottom:10px; list-style:none;
+    display:flex; align-items:center; gap:6px; user-select:none;
+  }
+  details.tpb-fe-section > summary::before { content:'▶'; font-size:9px; transition:transform 0.15s; display:inline-block; }
+  details[open].tpb-fe-section > summary::before { transform:rotate(90deg); }
+  .tpb-fe-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; }
+  .tpb-fe-grid.single { grid-template-columns:1fr; }
+  .tpb-fe-grid.triple { grid-template-columns:1fr 1fr 1fr; }
+  .tpb-fe-span2 { grid-column:span 2; }
+  .tpb-fe-group { display:flex; flex-direction:column; gap:3px; }
+  .tpb-fe-label { font-size:11px; color:var(--text-muted); font-weight:500; }
+  .tpb-fe-hint  { font-size:10px; color:var(--text-muted); margin-top:2px; font-style:italic; }
+  .tpb-fe-err   { font-size:10px; color:var(--danger); margin-top:2px; }
+  .tpb-filter-row { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:6px; align-items:center; margin-bottom:6px; }
+  .tpb-filter-row button { padding:4px 8px; font-size:13px; background:none; border:1px solid var(--border); color:var(--danger); border-radius:4px; cursor:pointer; }
+  .tpb-filter-row button:hover { background:rgba(248,81,73,0.1); }
+  .tpb-fe-footer { display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border); margin-top:8px; flex-wrap:wrap; }
+  .tpb-enum-hint { font-size:10px; color:var(--text-muted); background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:3px 8px; margin-top:3px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .tpb-enum-val  { background:var(--surface); border:1px solid var(--border); border-radius:3px; padding:1px 5px; font-family:monospace; }
+  .tpb-cond-section { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin-top:8px; }
+  .tpb-cond-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:8px; }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>JDS Manager</h1>
+      <p>Journey Data Services</p>
+    </div>
+    <nav>
+      <div class="nav-section">Identity</div>
+      <a class="nav-link active" data-page="lookup" onclick="showPage('lookup')">
+        <span class="icon">🔍</span><span>Person Lookup</span>
+      </a>
+      <a class="nav-link" data-page="create" onclick="showPage('create')">
+        <span class="icon">👤</span><span>Create Person</span>
+      </a>
+      <a class="nav-section" style="display:block; padding: 8px 16px 4px; font-size:10px; font-weight:600; color:var(--text-muted); letter-spacing:0.8px; text-transform:uppercase;">Events</a>
+      <a class="nav-link" data-page="post-event" onclick="showPage('post-event')">
+        <span class="icon">📤</span><span>Post Event</span>
+      </a>
+      <a class="nav-link" data-page="history" onclick="showPage('history')">
+        <span class="icon">📋</span><span>Event History</span>
+      </a>
+      <a class="nav-link" data-page="timeline" onclick="showPage('timeline')">
+        <span class="icon">🗺️</span><span>Journey Timeline</span>
+      </a>
+      <a class="nav-section" style="display:block; padding: 8px 16px 4px; font-size:10px; font-weight:600; color:var(--text-muted); letter-spacing:0.8px; text-transform:uppercase;">Config</a>
+      <a class="nav-link" data-page="templates" onclick="showPage('templates')">
+        <span class="icon">📐</span><span>Profile Templates</span>
+      </a>
+      <a class="nav-link" data-page="template-proto" onclick="showPage('template-proto')">
+        <span class="icon">🧩</span><span>Template Builder</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="settings-btn" onclick="openSettings()">
+        <span>⚙️</span><span>Settings</span>
+        <span class="config-dot" id="configDot"></span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- Person Lookup -->
+    <div class="page active" id="page-lookup">
+      <div class="page-header">
+        <h2>Person Lookup</h2>
+        <p>Search for a person by phone, email, or customerId</p>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Identity (phone, email, or customerId)</label>
+              <div class="identity-wrapper">
+                <input type="text" id="lookup-identity" placeholder="+12223334444 or user@example.com" onkeydown="if(event.key==='Enter') lookupPerson()" onfocus="openIdentityDropdown('lookup-identity')" oninput="filterIdentityDropdown('lookup-identity')" autocomplete="off" />
+                <div class="identity-dropdown" id="lookup-identity-dd"></div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>&nbsp;</label>
+              <div class="btn-group">
+                <button class="btn btn-primary" onclick="lookupPerson()">🔍 Search</button>
+                <button class="btn btn-secondary" onclick="clearLookup()">Clear</button>
+              </div>
+            </div>
+          </div>
+          <div id="lookup-result"></div>
+        </div>
+
+        <!-- Quick actions (shown after lookup) -->
+        <div id="lookup-actions" style="display:none">
+          <div class="card">
+            <div class="card-title">Actions</div>
+            <div class="btn-group">
+              <button class="btn btn-secondary" onclick="openEditPerson()">✏️ Edit Person</button>
+              <button class="btn btn-secondary" onclick="openMerge()">🔗 Merge Identity</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Person -->
+    <div class="page" id="page-create">
+      <div class="page-header">
+        <h2>Create Person</h2>
+        <p>Register a new identity in JDS</p>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>First Name</label>
+              <input type="text" id="cp-first" placeholder="First" />
+            </div>
+            <div class="form-group">
+              <label>Last Name</label>
+              <input type="text" id="cp-last" placeholder="Last" />
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-group">
+              <label>Phone Numbers (press Enter to add)</label>
+              <div class="tag-input-wrapper" id="cp-phones-wrapper" onclick="this.querySelector('input').focus()">
+                <input type="text" id="cp-phones-input" placeholder="+12223334444" onkeydown="tagInputKey(event,'cp-phones')" />
+              </div>
+              <input type="hidden" id="cp-phones-data" value="[]" />
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-group">
+              <label>Emails (press Enter to add)</label>
+              <div class="tag-input-wrapper" id="cp-emails-wrapper" onclick="this.querySelector('input').focus()">
+                <input type="text" id="cp-emails-input" placeholder="user@example.com" onkeydown="tagInputKey(event,'cp-emails')" />
+              </div>
+              <input type="hidden" id="cp-emails-data" value="[]" />
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-group">
+              <label>Customer IDs (press Enter to add)</label>
+              <div class="tag-input-wrapper" id="cp-custids-wrapper" onclick="this.querySelector('input').focus()">
+                <input type="text" id="cp-custids-input" placeholder="4689557617731186" onkeydown="tagInputKey(event,'cp-custids')" />
+              </div>
+              <input type="hidden" id="cp-custids-data" value="[]" />
+            </div>
+          </div>
+          <div class="btn-group" style="margin-top:8px">
+            <button class="btn btn-primary" onclick="createPerson()">👤 Create Person</button>
+            <button class="btn btn-secondary" onclick="clearCreate()">Clear</button>
+          </div>
+          <div id="create-result" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post Event -->
+    <div class="page" id="page-post-event">
+      <div class="page-header">
+        <h2>Post Event</h2>
+        <p>Ingest a journey event for an identity</p>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Identity (who this event is for)</label>
+              <div class="identity-wrapper">
+                <input type="text" id="pe-identity" placeholder="+12265551234 or user@email.com" onfocus="openIdentityDropdown('pe-identity')" oninput="filterIdentityDropdown('pe-identity'); syncOriginFromIdentity(); autoDetectIdentityType()" autocomplete="off" />
+                <div class="identity-dropdown" id="pe-identity-dd"></div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Identity Type</label>
+              <select id="pe-identitytype">
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+                <option value="customerId">Customer ID</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row triple">
+            <div class="form-group">
+              <label>Event Type</label>
+              <select id="pe-type" onchange="applyEventTypeDefaults()">
+                <option value="task:new">task:new</option>
+                <option value="task:ended">task:ended</option>
+                <option value="task:updated">task:updated</option>
+                <option value="web:pagevisit">web:pagevisit</option>
+                <option value="web:download">web:download</option>
+                <option value="web:formsubmit">web:formsubmit</option>
+                <option value="email:sent">email:sent</option>
+                <option value="email:opened">email:opened</option>
+                <option value="email:clicked">email:clicked</option>
+                <option value="sms:sent">sms:sent</option>
+                <option value="sms:received">sms:received</option>
+                <option value="chat:started">chat:started</option>
+                <option value="chat:ended">chat:ended</option>
+                <option value="social:mention">social:mention</option>
+                <option value="custom:event">custom:event</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Channel Type</label>
+              <select id="pe-channel">
+                <option value="web">Web</option>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+                <option value="chat">Chat</option>
+                <option value="telephony">Telephony</option>
+                <option value="social">Social</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Icon Type</label>
+              <select id="pe-icontype">
+                <option value="web">web</option>
+                <option value="email">email</option>
+                <option value="sms">sms</option>
+                <option value="chat">chat</option>
+                <option value="telephony">telephony</option>
+                <option value="social">social</option>
+                <option value="custom">custom</option>
+                <option value="cart">cart</option>
+                <option value="star">star</option>
+                <option value="flag">flag</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Title</label>
+              <input type="text" id="pe-title" placeholder="Page Visit: Pricing" />
+            </div>
+            <div class="form-group">
+              <label>Subtitle</label>
+              <input type="text" id="pe-subtitle" placeholder="Visited pricing page" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Origin (source identifier)</label>
+              <input type="text" id="pe-origin" placeholder="user@example.com or +1555..." />
+            </div>
+            <div class="form-group">
+              <label>Task ID (UUID, auto-generated if blank)</label>
+              <input type="text" id="pe-taskid" placeholder="Leave blank to auto-generate" />
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-group">
+              <label>Custom Data (JSON, optional)</label>
+              <textarea id="pe-customdata" placeholder='{"url": "https://example.com/pricing", "duration": 45}'></textarea>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:6px">
+                <input type="checkbox" id="pe-hidden" style="width:auto" /> Hidden from Agent Desktop
+              </label>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="postEvent()">📤 Post Event</button>
+            <button class="btn btn-secondary" onclick="clearPostEvent()">Clear</button>
+          </div>
+          <div id="post-event-result" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event History -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <h2>Event History</h2>
+        <p>Query past journey events for an identity</p>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Identity</label>
+              <div class="identity-wrapper">
+                <input type="text" id="eh-identity" placeholder="+12265551234 or user@email.com" onkeydown="if(event.key==='Enter') fetchHistory()" onfocus="openIdentityDropdown('eh-identity')" oninput="filterIdentityDropdown('eh-identity')" autocomplete="off" />
+                <div class="identity-dropdown" id="eh-identity-dd"></div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Page Size</label>
+              <select id="eh-pagesize">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Filter by Type (optional)</label>
+              <input type="text" id="eh-typefilter" placeholder="task:new or web:pagevisit" />
+            </div>
+            <div class="form-group">
+              <label>Filter by Data (optional)</label>
+              <input type="text" id="eh-datafilter" placeholder="channelType=='email'" />
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="fetchHistory()">📋 Fetch Events</button>
+            <button class="btn btn-secondary" onclick="clearHistory()">Clear</button>
+          </div>
+        </div>
+        <div id="history-result"></div>
+      </div>
+    </div>
+
+    <!-- Journey Timeline -->
+    <div class="page" id="page-timeline">
+      <div class="page-header">
+        <h2>Journey Timeline</h2>
+        <p>Swimlane view of a customer's omnichannel journey</p>
+      </div>
+      <div class="page-body">
+        <div class="card" style="margin-bottom:16px">
+          <div class="search-bar">
+            <div class="identity-wrapper" style="flex:1">
+              <input type="text" id="proto-identity" placeholder="Identity: +1 555... or user@email.com"
+                onkeydown="if(event.key==='Enter') fetchProtoTimeline()"
+                onfocus="openIdentityDropdown('proto-identity')"
+                oninput="filterIdentityDropdown('proto-identity')"
+                autocomplete="off" />
+              <div class="identity-dropdown" id="proto-identity-dd"></div>
+            </div>
+            <button class="btn btn-primary" onclick="fetchProtoTimeline()">🗺️ Load Timeline</button>
+          </div>
+        </div>
+        <div id="proto-result"></div>
+      </div>
+    </div>
+
+    <!-- Profile Templates -->
+    <div class="page" id="page-templates">
+      <div class="page-header">
+        <h2>Profile Templates</h2>
+        <p>Manage profile view templates for the Agent Desktop widget</p>
+      </div>
+      <div class="page-body">
+        <div class="btn-group" style="margin-bottom:16px">
+          <button class="btn btn-primary" onclick="fetchTemplates()">🔄 Refresh</button>
+          <button class="btn btn-secondary" onclick="openCreateTemplate()">➕ New Template</button>
+        </div>
+        <div id="templates-result"></div>
+      </div>
+    </div>
+
+    <!-- Profile Template Builder -->
+    <div class="page" id="page-template-proto">
+      <!-- full-bleed 3-column layout; .page-body scroll is bypassed -->
+      <div class="tpb-shell">
+
+        <!-- LEFT: Template Library -->
+        <aside class="tpb-library">
+          <div class="tpb-library-header">
+            <h2 class="tpb-section-title">Template Library</h2>
+            <button class="btn btn-sm btn-primary" onclick="tpbNewTemplate()">+ New</button>
+          </div>
+          <div id="tpb-library-list"></div>
+        </aside>
+
+        <!-- CENTRE: Builder -->
+        <div class="tpb-builder">
+          <div class="tpb-builder-header">
+            <h1 class="tpb-page-title">Journey Profile Template Builder</h1>
+          </div>
+
+          <!-- Read-only banner (shown for system templates) -->
+          <div id="tpb-readonly-banner" class="alert alert-warning" style="display:none;margin-bottom:12px">
+            🔒 This is a system template and cannot be edited.
+          </div>
+
+          <!-- Template meta -->
+          <div class="tpb-card" id="tpb-meta-card">
+            <div class="tpb-card-title">Template Info</div>
+            <div class="tpb-form-grid">
+              <div class="tpb-form-group">
+                <label class="tpb-label">Display Name</label>
+                <input class="tpb-input" id="tpb-displayName" oninput="tpbUpdateMeta()" />
+              </div>
+              <div class="tpb-form-group">
+                <label class="tpb-label">API Template Name</label>
+                <input class="tpb-input" id="tpb-templateName" oninput="tpbUpdateMeta()" />
+              </div>
+              <div class="tpb-form-group">
+                <label class="tpb-label">Workspace ID</label>
+                <input class="tpb-input" id="tpb-workspaceId" oninput="tpbUpdateMeta()" />
+              </div>
+              <div class="tpb-form-group tpb-span2">
+                <label class="tpb-label">Description</label>
+                <textarea class="tpb-input tpb-textarea" id="tpb-description" oninput="tpbUpdateMeta()"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Field list -->
+          <div class="tpb-card">
+            <div class="tpb-card-header">
+              <div class="tpb-card-title">Profile Fields</div>
+              <button class="btn btn-sm btn-secondary" onclick="tpbAddField()">+ Add Field</button>
+            </div>
+            <div id="tpb-field-list"></div>
+          </div>
+
+          <!-- Field editor (rendered by tpbRenderFieldEditor) -->
+          <div class="tpb-card" id="tpb-field-editor" style="display:none"></div>
+
+          <!-- Footer actions -->
+          <div class="tpb-footer">
+            <button class="btn btn-secondary" onclick="tpbOpenCopyModal()">📋 Copy</button>
+            <button class="btn btn-secondary" id="tpb-save-draft-btn" onclick="tpbSaveDraft()">💾 Save Draft</button>
+            <button class="btn btn-primary" id="tpb-publish-btn" onclick="tpbPublish()">🚀 Save to API</button>
+          </div>
+        </div>
+
+        <!-- RIGHT: Preview panel -->
+        <aside class="tpb-preview">
+          <div class="tpb-preview-tabs">
+            <button class="tpb-tab active" id="tpb-tab-preview" onclick="tpbSetTab('preview')">Preview</button>
+            <button class="tpb-tab" id="tpb-tab-json" onclick="tpbSetTab('json')">JSON</button>
+            <button class="tpb-tab" id="tpb-tab-validation" onclick="tpbSetTab('validation')">Validation</button>
+          </div>
+
+          <!-- Preview tab -->
+          <div id="tpb-pane-preview" class="tpb-pane">
+            <div class="tpb-card">
+              <div class="tpb-card-title">Agent Preview</div>
+              <!-- Person search -->
+              <div class="identity-wrapper" style="margin-bottom:10px">
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input type="text" id="tpb-preview-identity" class="input"
+                    placeholder="+12223334444 or user@example.com"
+                    style="flex:1;font-size:12px"
+                    onfocus="openIdentityDropdown('tpb-preview-identity')"
+                    oninput="filterIdentityDropdown('tpb-preview-identity')"
+                    onkeydown="if(event.key==='Enter')tpbPreviewLookup()" />
+                  <button class="btn btn-sm btn-primary" onclick="tpbPreviewLookup()">Search</button>
+                </div>
+                <div class="identity-dropdown" id="tpb-preview-identity-dd"></div>
+              </div>
+              <div id="tpb-preview-person"></div>
+              <div id="tpb-preview-rows"></div>
+            </div>
+          </div>
+
+          <!-- JSON tab -->
+          <div id="tpb-pane-json" class="tpb-pane" style="display:none">
+            <pre id="tpb-json-box" class="tpb-json-box"></pre>
+          </div>
+
+          <!-- Validation tab -->
+          <div id="tpb-pane-validation" class="tpb-pane" style="display:none">
+            <div class="tpb-card">
+              <div class="tpb-card-title" id="tpb-validation-title">Validation</div>
+              <div id="tpb-validation-issues"></div>
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Debug Panel -->
+<div id="debug-panel" style="display:none; position:fixed; bottom:0; left:220px; right:0; height:280px; background:#0d1117; border-top:2px solid #f85149; z-index:500; flex-direction:column;">
+  <div style="display:flex; align-items:center; padding:6px 12px; background:#161b22; border-bottom:1px solid #30363d; gap:10px;">
+    <span style="font-size:12px; font-weight:600; color:#f85149;">🐛 Debug Console</span>
+    <button class="btn btn-sm btn-secondary" onclick="clearDebug()" style="margin-left:auto">Clear</button>
+    <button class="btn btn-sm btn-secondary" onclick="toggleDebug()">Hide</button>
+  </div>
+  <div id="debug-log" style="flex:1; overflow-y:auto; padding:8px 12px; font-family:monospace; font-size:11px; line-height:1.6;"></div>
+</div>
+<button id="debug-toggle-btn" onclick="toggleDebug()" style="position:fixed; bottom:12px; right:16px; z-index:600; background:#f85149; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; font-weight:600;">🐛 Debug</button>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>⚙️ Settings</h3>
+      <button class="modal-close" onclick="closeSettings()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-section">
+        <h3>CJDS Connection</h3>
+        <div class="form-row single">
+          <div class="form-group">
+            <label>Region</label>
+            <select id="cfg-region" onchange="settingsApplyRegion()">
+              <option value="us1">US1 (api.wxcc-us1.cisco.com)</option>
+              <option value="eu1">EU1 (api.wxcc-eu1.cisco.com)</option>
+              <option value="eu2">EU2 (api.wxcc-eu2.cisco.com)</option>
+              <option value="anz1">ANZ1 (api.wxcc-anz1.cisco.com)</option>
+              <option value="jp1">JP1 (api.wxcc-jp1.cisco.com)</option>
+              <option value="ca1">CA1 (api.wxcc-ca1.cisco.com)</option>
+              <option value="sg1">SG1 (api.wxcc-sg1.cisco.com)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row single">
+          <div class="form-group">
+            <label>Workspace</label>
+            <select id="cfg-workspace-select" onchange="settingsSelectWorkspace()">
+            </select>
+          </div>
+        </div>
+        <!-- Shown only when "add new" is chosen -->
+        <div id="cfg-new-workspace-fields" style="display:none">
+          <div class="form-row single" style="margin-top:8px">
+            <div class="form-group">
+              <label>Workspace ID <span style="font-size:11px;color:var(--text-muted)">(UUID)</span></label>
+              <input type="text" id="cfg-new-workspace-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-group">
+              <label>Namespace <span style="font-size:11px;color:var(--text-muted)">(optional)</span></label>
+              <input type="text" id="cfg-new-namespace" placeholder="e.g. sandbox or your-org-namespace" />
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-group">
+              <label>Label <span style="font-size:11px;color:var(--text-muted)">(optional, for the dropdown)</span></label>
+              <input type="text" id="cfg-new-label" placeholder="e.g. Production, Sandbox…" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="btn btn-primary btn-sm" onclick="settingsSaveNewWorkspace()">✔ Use this workspace</button>
+            <button class="btn btn-secondary btn-sm" onclick="settingsCancelNew()">Cancel</button>
+          </div>
+        </div>
+        <!-- Read-only display of current namespace when an existing workspace is selected -->
+        <div id="cfg-current-namespace-row" class="form-row single" style="margin-top:4px">
+          <div class="form-group">
+            <label>Namespace <span style="font-size:11px;color:var(--text-muted)">(for Profile Templates)</span></label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" id="cfg-namespace-display" placeholder="—" readonly style="background:var(--surface2);cursor:default" />
+              <button class="btn btn-secondary btn-sm" title="Edit namespace for this workspace" onclick="settingsEditNamespace()" style="white-space:nowrap">✏️ Edit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Webex Authentication</h3>
+        <div id="auth-status-block" style="margin-bottom:14px;font-size:13px"></div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="webexLogin()">🔐 Sign in with Webex</button>
+          <button class="btn btn-danger btn-sm" id="logout-btn" onclick="webexLogout()" style="display:none">Sign Out</button>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--text-muted)">Tokens are managed server-side and refresh automatically. You only need to sign in once.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeSettings()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Copy Template Modal -->
+<div class="modal-overlay" id="tpb-copy-modal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <h3>📋 Copy Template</h3>
+      <button class="modal-close" onclick="closeModal('tpb-copy-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row single">
+        <div class="form-group">
+          <label>New Display Name</label>
+          <input type="text" id="tpb-copy-displayName" placeholder="Copy of My Template" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label>New API Template Name <span style="font-size:11px;color:var(--text-muted)">(unique, no spaces)</span></label>
+          <input type="text" id="tpb-copy-templateName" placeholder="copy-of-my-template" />
+        </div>
+      </div>
+      <div id="tpb-copy-error" style="margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('tpb-copy-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="tpbConfirmCopy()">📋 Create Copy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Person Modal -->
+<div class="modal-overlay" id="edit-person-modal">
+  <div class="modal" style="width:620px">
+    <div class="modal-header">
+      <h3>✏️ Edit Person</h3>
+      <button class="modal-close" onclick="closeModal('edit-person-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-section">
+        <h3>Name</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>First Name</label>
+            <input type="text" id="edit-first" />
+          </div>
+          <div class="form-group">
+            <label>Last Name</label>
+            <input type="text" id="edit-last" />
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Phone Numbers</h3>
+        <div id="edit-phones-list"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="edit-phone-new" placeholder="+12265551234" style="flex:1" onkeydown="if(event.key==='Enter') addEditAlias('phone')" />
+          <button class="btn btn-secondary btn-sm" onclick="addEditAlias('phone')">➕ Add</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Email Addresses</h3>
+        <div id="edit-emails-list"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="edit-email-new" placeholder="user@example.com" style="flex:1" onkeydown="if(event.key==='Enter') addEditAlias('email')" />
+          <button class="btn btn-secondary btn-sm" onclick="addEditAlias('email')">➕ Add</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Customer IDs</h3>
+        <div id="edit-custids-list"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="edit-custid-new" placeholder="4689557617731186" style="flex:1" onkeydown="if(event.key==='Enter') addEditAlias('customerId')" />
+          <button class="btn btn-secondary btn-sm" onclick="addEditAlias('customerId')">➕ Add</button>
+        </div>
+      </div>
+      <div id="edit-person-result" style="margin-top:4px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-person-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditPerson()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Merge Modal -->
+<div class="modal-overlay" id="merge-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🔗 Merge Identities</h3>
+      <button class="modal-close" onclick="closeModal('merge-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Primary: <strong id="merge-primary-name"></strong></p>
+      <div class="form-row single">
+        <div class="form-group">
+          <label>Person IDs to merge into primary (comma-separated)</label>
+          <textarea id="merge-ids" placeholder="id1,id2,id3" style="min-height:60px"></textarea>
+        </div>
+      </div>
+      <div id="merge-result" style="margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('merge-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="mergePerson()">Merge</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Template Modal -->
+<div class="modal-overlay" id="template-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="template-modal-title">➕ New Profile Template</h3>
+      <button class="modal-close" onclick="closeModal('template-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="tmpl-readonly-banner" style="display:none;margin-bottom:12px" class="alert alert-info">🔒 This is a system template and cannot be edited.</div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label>Template Name</label>
+          <input type="text" id="tmpl-name" placeholder="default-profile" />
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label>Template JSON</label>
+          <textarea id="tmpl-json" style="min-height:200px;font-family:monospace;font-size:12px" placeholder='{"name":"default","attributes":[]}'></textarea>
+        </div>
+      </div>
+      <div id="tmpl-result" style="margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('template-modal')">Close</button>
+      <button class="btn btn-primary" id="tmpl-save-btn" onclick="saveTemplate()">💾 Save Template</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ─────────────────────────────────────────────────────────────────
+const cfg = {
+  region: localStorage.getItem('jds_region') || 'us1',
+  workspaceId: localStorage.getItem('jds_workspace') || '',
+  namespaceName: localStorage.getItem('jds_namespace') || '',
+};
+
+let authStatus = { authenticated: false, hasRefreshToken: false, expiresInSeconds: 0 };
+let currentPerson = null;
+let currentTemplateId = null;
+
+
+// ─── Utility ────────────────────────────────────────────────────────────────
+function cfg_ok() { return cfg.workspaceId && authStatus.authenticated; }
+
+function updateConfigDot() {
+  const dot = document.getElementById('configDot');
+  dot.className = 'config-dot' + (cfg_ok() ? ' ok' : '');
+}
+
+// ─── Recent identities ────────────────────────────────────────────────────────
+const RECENT_KEY = 'jds_recent_identities';
+const RECENT_MAX = 10;
+
+function getRecentIdentities() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+}
+
+function saveRecentIdentity(identity) {
+  if (!identity) return;
+  let recents = getRecentIdentities().filter(r => r !== identity);
+  recents.unshift(identity);
+  if (recents.length > RECENT_MAX) recents = recents.slice(0, RECENT_MAX);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+}
+
+function removeRecentIdentity(identity) {
+  const recents = getRecentIdentities().filter(r => r !== identity);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+}
+
+function clearRecentIdentities() {
+  localStorage.removeItem(RECENT_KEY);
+  document.querySelectorAll('.identity-dropdown').forEach(dd => dd.classList.remove('open'));
+}
+
+function closeAllIdentityDropdowns() {
+  document.querySelectorAll('.identity-dropdown').forEach(dd => dd.classList.remove('open'));
+}
+
+function positionDropdown(inputId) {
+  const input = document.getElementById(inputId);
+  const dd = document.getElementById(inputId + '-dd');
+  if (!input || !dd) return;
+  const rect = input.getBoundingClientRect();
+  dd.style.top = (rect.bottom + 2) + 'px';
+  dd.style.left = rect.left + 'px';
+  dd.style.width = rect.width + 'px';
+}
+
+// Map inputId → search function to call after selection
+const identitySearchFns = {
+  'lookup-identity':       () => lookupPerson(),
+  'pe-identity':           () => {},           // post event — just fill, don't auto-submit
+  'eh-identity':           () => fetchHistory(),
+  'proto-identity':        () => fetchProtoTimeline(),
+  'tpb-preview-identity':  () => tpbPreviewLookup(),
+};
+
+function renderIdentityDropdown(inputId, filter) {
+  const dd = document.getElementById(inputId + '-dd');
+  if (!dd) return;
+  const recents = getRecentIdentities().filter(r => !filter || r.toLowerCase().includes(filter.toLowerCase()));
+  if (!recents.length) { dd.classList.remove('open'); return; }
+
+  // Build DOM nodes instead of innerHTML to attach real event listeners
+  dd.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'identity-dropdown-header';
+  header.innerHTML = '<span>Recent</span>';
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = 'Clear all';
+  clearBtn.addEventListener('click', (e) => { e.stopPropagation(); clearRecentIdentities(); });
+  header.appendChild(clearBtn);
+  dd.appendChild(header);
+
+  recents.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'identity-option';
+
+    const icon = document.createElement('span');
+    icon.textContent = '🕐';
+
+    const label = document.createElement('span');
+    label.textContent = r;
+    label.style.flex = '1';
+
+    const removeBtn = document.createElement('span');
+    removeBtn.className = 'identity-remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeRecentIdentity(r);
+      renderIdentityDropdown(inputId, document.getElementById(inputId).value.trim());
+    });
+
+    row.appendChild(icon);
+    row.appendChild(label);
+    row.appendChild(removeBtn);
+
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById(inputId).value = r;
+      closeAllIdentityDropdowns();
+      // Mirror identity → origin for post event page
+      if (inputId === 'pe-identity') { syncOriginFromIdentity(); autoDetectIdentityType(); }
+      // Auto-trigger search for this field
+      const fn = identitySearchFns[inputId];
+      if (fn) fn();
+    });
+
+    dd.appendChild(row);
+  });
+
+  positionDropdown(inputId);
+  dd.classList.add('open');
+}
+
+function openIdentityDropdown(inputId) {
+  const val = document.getElementById(inputId).value.trim();
+  renderIdentityDropdown(inputId, val);
+}
+
+function filterIdentityDropdown(inputId) {
+  const val = document.getElementById(inputId).value.trim();
+  renderIdentityDropdown(inputId, val);
+}
+
+function removeRecentAndRefresh(inputId, value) {
+  removeRecentIdentity(value);
+  renderIdentityDropdown(inputId, document.getElementById(inputId).value.trim());
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.identity-wrapper') && !e.target.closest('.identity-dropdown')) {
+    closeAllIdentityDropdowns();
+  }
+});
+window.addEventListener('scroll', () => {
+  document.querySelectorAll('.identity-dropdown.open').forEach(dd => {
+    positionDropdown(dd.id.replace('-dd', ''));
+  });
+}, true);
+window.addEventListener('resize', closeAllIdentityDropdowns);
+
+// ─── Debug panel ─────────────────────────────────────────────────────────────
+let debugVisible = false;
+function toggleDebug() {
+  debugVisible = !debugVisible;
+  document.getElementById('debug-panel').style.display = debugVisible ? 'flex' : 'none';
+  document.getElementById('debug-toggle-btn').textContent = debugVisible ? '🐛 Hide' : '🐛 Debug';
+}
+function clearDebug() { document.getElementById('debug-log').innerHTML = ''; }
+function debugLog(type, msg) {
+  const log = document.getElementById('debug-log');
+  const colors = { req: '#58a6ff', res: '#3fb950', err: '#f85149', info: '#8b949e' };
+  const color = colors[type] || '#e6edf3';
+  const time = new Date().toLocaleTimeString();
+  log.innerHTML += `<div style="color:${color}; border-bottom:1px solid #21262d; padding:3px 0"><span style="color:#8b949e">[${time}]</span> ${escapeHtml(msg)}</div>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+async function api(method, path, body) {
+  if (!cfg.workspaceId) {
+    throw new Error('Not configured. Open Settings and enter Workspace ID, then sign in with Webex.');
+  }
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-cjds-region': cfg.region,
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+
+  const fullPath = '/api' + path;
+  debugLog('req', `→ ${method} ${fullPath}${body ? '\n  Body: ' + JSON.stringify(body) : ''}`);
+
+  const res = await fetch(fullPath, opts);
+  const targetUrl = res.headers.get('x-debug-target-url') || '';
+  const ct = res.headers.get('content-type') || '';
+
+  if (ct.includes('application/json')) {
+    const data = await res.json();
+    debugLog(res.ok ? 'res' : 'err',
+      `← ${res.status} ${targetUrl}\n  Body: ${JSON.stringify(data)}`);
+    if (!res.ok) {
+      const msg = data.message || data.error || data.title || data.detail || 'Error occurred';
+      const err = new Error(msg);
+      err.responseBody = data;
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+  const text = await res.text();
+  debugLog(res.ok ? 'res' : 'err', `← ${res.status} ${targetUrl}\n  Text: ${text}`);
+  if (!res.ok) {
+    const err = new Error(text || `HTTP ${res.status}`);
+    err.responseBody = text;
+    err.status = res.status;
+    throw err;
+  }
+  return text;
+}
+
+function wsPath(path) {
+  return path.replace('{wsId}', cfg.workspaceId);
+}
+
+function uuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function formatDate(ts) {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleString();
+  } catch { return ts; }
+}
+
+function relativeTime(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function alert_html(type, msg) {
+  return `<div class="alert alert-${type}">${escapeHtml(msg)}</div>`;
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function channelClass(ch) {
+  const map = { web:'web', email:'email', sms:'sms', chat:'chat', telephony:'telephony', social:'social' };
+  return map[ch] || 'custom';
+}
+
+function channelIcon(ch) {
+  const map = { web:'🌐', email:'✉️', sms:'💬', chat:'💭', telephony:'📞', social:'📱', custom:'⚡' };
+  return map[ch] || '⚡';
+}
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelector(`[data-page="${id}"]`).classList.add('active');
+  if (id === 'template-proto') tpbInit();
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+// Workspace history: array of { workspaceId, namespaceName, label }
+// Stored in localStorage as JSON under 'jds_workspace_history'.
+function wsHistory() {
+  try { return JSON.parse(localStorage.getItem('jds_workspace_history') || '[]'); } catch { return []; }
+}
+function wsSaveHistory(arr) {
+  localStorage.setItem('jds_workspace_history', JSON.stringify(arr));
+}
+
+// Ensure the current cfg workspace is in history (called at boot and after any save).
+function wsEnsureCurrent() {
+  if (!cfg.workspaceId) return;
+  const hist = wsHistory();
+  const existing = hist.find(e => e.workspaceId === cfg.workspaceId);
+  if (existing) {
+    // Keep namespace in sync
+    existing.namespaceName = cfg.namespaceName;
+    wsSaveHistory(hist);
+  } else {
+    hist.unshift({ workspaceId: cfg.workspaceId, namespaceName: cfg.namespaceName, label: '' });
+    wsSaveHistory(hist);
+  }
+}
+
+function settingsRebuildDropdown() {
+  const sel = document.getElementById('cfg-workspace-select');
+  if (!sel) return;
+  const hist = wsHistory();
+  sel.innerHTML = '';
+  hist.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e.workspaceId;
+    const short = e.workspaceId.slice(0, 8) + '…';
+    opt.textContent = e.label ? `${e.label} (${e.workspaceId})` : e.workspaceId;
+    opt.title = e.workspaceId;
+    if (e.workspaceId === cfg.workspaceId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  // Always add "＋ Add new workspace…" at the bottom
+  const addOpt = document.createElement('option');
+  addOpt.value = '__add_new__';
+  addOpt.textContent = '＋ Add new workspace…';
+  sel.appendChild(addOpt);
+  // Refresh namespace display
+  const entry = hist.find(e => e.workspaceId === cfg.workspaceId);
+  const nsDisplay = document.getElementById('cfg-namespace-display');
+  if (nsDisplay) nsDisplay.value = (entry && entry.namespaceName) || cfg.namespaceName || '';
+}
+
+function openSettings() {
+  wsEnsureCurrent();
+  document.getElementById('cfg-region').value = cfg.region;
+  settingsRebuildDropdown();
+  settingsHideNewFields();
+  renderAuthStatus();
+  document.getElementById('settings-modal').classList.add('open');
+}
+
+function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
+
+function settingsHideNewFields() {
+  document.getElementById('cfg-new-workspace-fields').style.display = 'none';
+  document.getElementById('cfg-current-namespace-row').style.display = '';
+}
+
+function settingsApplyRegion() {
+  cfg.region = document.getElementById('cfg-region').value;
+  localStorage.setItem('jds_region', cfg.region);
+  updateConfigDot();
+}
+
+function settingsSelectWorkspace() {
+  const sel = document.getElementById('cfg-workspace-select');
+  const val = sel.value;
+  if (val === '__add_new__') {
+    document.getElementById('cfg-new-workspace-fields').style.display = '';
+    document.getElementById('cfg-current-namespace-row').style.display = 'none';
+    document.getElementById('cfg-new-workspace-id').value = '';
+    document.getElementById('cfg-new-namespace').value = '';
+    document.getElementById('cfg-new-label').value = '';
+    return;
+  }
+  // Switch to selected workspace immediately
+  const hist = wsHistory();
+  const entry = hist.find(e => e.workspaceId === val);
+  if (!entry) return;
+  cfg.workspaceId  = entry.workspaceId;
+  cfg.namespaceName = entry.namespaceName || '';
+  localStorage.setItem('jds_workspace', cfg.workspaceId);
+  localStorage.setItem('jds_namespace', cfg.namespaceName);
+  const nsDisplay = document.getElementById('cfg-namespace-display');
+  if (nsDisplay) nsDisplay.value = cfg.namespaceName;
+  updateConfigDot();
+}
+
+function settingsSaveNewWorkspace() {
+  const wsId = document.getElementById('cfg-new-workspace-id').value.trim();
+  if (!wsId) { alert('Workspace ID is required.'); return; }
+  const ns    = document.getElementById('cfg-new-namespace').value.trim();
+  const label = document.getElementById('cfg-new-label').value.trim();
+  const hist  = wsHistory();
+  const existing = hist.find(e => e.workspaceId === wsId);
+  if (existing) {
+    existing.namespaceName = ns;
+    if (label) existing.label = label;
+  } else {
+    hist.unshift({ workspaceId: wsId, namespaceName: ns, label });
+  }
+  wsSaveHistory(hist);
+  cfg.workspaceId   = wsId;
+  cfg.namespaceName = ns;
+  localStorage.setItem('jds_workspace', cfg.workspaceId);
+  localStorage.setItem('jds_namespace', cfg.namespaceName);
+  updateConfigDot();
+  settingsRebuildDropdown();
+  settingsHideNewFields();
+}
+
+function settingsCancelNew() {
+  // Revert dropdown to current workspace
+  const sel = document.getElementById('cfg-workspace-select');
+  if (sel) sel.value = cfg.workspaceId || '__add_new__';
+  settingsHideNewFields();
+}
+
+function settingsEditNamespace() {
+  const nsDisplay = document.getElementById('cfg-namespace-display');
+  const current   = nsDisplay ? nsDisplay.value : cfg.namespaceName;
+  const updated   = prompt('Edit namespace for this workspace:', current);
+  if (updated === null) return; // cancelled
+  cfg.namespaceName = updated.trim();
+  localStorage.setItem('jds_namespace', cfg.namespaceName);
+  // Update in history
+  const hist = wsHistory();
+  const entry = hist.find(e => e.workspaceId === cfg.workspaceId);
+  if (entry) entry.namespaceName = cfg.namespaceName;
+  wsSaveHistory(hist);
+  if (nsDisplay) nsDisplay.value = cfg.namespaceName;
+}
+
+function saveSettings() {
+  // Legacy shim — no longer called from UI but kept in case other code references it.
+  cfg.region        = document.getElementById('cfg-region').value;
+  cfg.workspaceId   = (document.getElementById('cfg-workspace-select')?.value !== '__add_new__'
+                        ? document.getElementById('cfg-workspace-select')?.value
+                        : cfg.workspaceId) || cfg.workspaceId;
+  cfg.namespaceName = document.getElementById('cfg-namespace-display')?.value || cfg.namespaceName;
+  localStorage.setItem('jds_region',    cfg.region);
+  localStorage.setItem('jds_workspace', cfg.workspaceId);
+  localStorage.setItem('jds_namespace', cfg.namespaceName);
+  wsEnsureCurrent();
+  updateConfigDot();
+  closeSettings();
+}
+
+function renderAuthStatus() {
+  const block = document.getElementById('auth-status-block');
+  const logoutBtn = document.getElementById('logout-btn');
+  if (authStatus.authenticated) {
+    const mins = Math.round(authStatus.expiresInSeconds / 60);
+    const refreshNote = authStatus.hasRefreshToken
+      ? '<span style="color:var(--success)">Auto-renewing</span>'
+      : '<span style="color:var(--warning)">No refresh token</span>';
+    block.innerHTML = `<span style="color:var(--success)">✓ Signed in</span> &nbsp;·&nbsp; Token expires in ~${mins} min &nbsp;·&nbsp; ${refreshNote}`;
+    logoutBtn.style.display = 'inline-flex';
+  } else {
+    block.innerHTML = `<span style="color:var(--danger)">✗ Not signed in</span> — click the button below to authenticate with Webex.`;
+    logoutBtn.style.display = 'none';
+  }
+}
+
+function webexLogin() { window.location.href = '/auth/login'; }
+
+async function webexLogout() {
+  await fetch('/auth/logout', { method: 'POST' });
+  authStatus = { authenticated: false, hasRefreshToken: false, expiresInSeconds: 0 };
+  updateConfigDot();
+  renderAuthStatus();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ─── Person Lookup ──────────────────────────────────────────────────────────
+async function lookupPerson() {
+  const identity = document.getElementById('lookup-identity').value.trim();
+  if (!identity) return;
+  const result = document.getElementById('lookup-result');
+  result.innerHTML = '<div style="padding:8px 0"><span class="spinner"></span> Searching...</div>';
+  closeAllIdentityDropdowns();
+  document.getElementById('lookup-actions').style.display = 'none';
+  try {
+    const encoded = encodeURIComponent(identity);
+    const response = await api('GET', `/admin/v1/api/person/workspace-id/${cfg.workspaceId}/aliases/${encoded}`);
+    // API returns { meta: {}, data: [ person, ... ] } or a single person object
+    const person = Array.isArray(response.data) ? response.data[0] : (response.data || response);
+    if (!person) { result.innerHTML = alert_html('info', 'No person found for that identity.'); return; }
+    saveRecentIdentity(identity);
+    currentPerson = person;
+    result.innerHTML = renderPersonCard(person);
+    document.getElementById('lookup-actions').style.display = 'block';
+    const displayName = `${person.firstName || ''} ${person.lastName || ''}`.trim() || identity;
+    document.getElementById('merge-primary-name').textContent = displayName;
+  } catch (e) {
+    if (e.status === 404) {
+      result.innerHTML = alert_html('info', 'No person found for that identity. You can create one using the ➕ Create Person page.');
+    } else {
+      result.innerHTML = alert_html('error', e.message);
+    }
+    currentPerson = null;
+  }
+}
+
+function renderPersonCard(p) {
+  const phones = (p.phone || []).map(v => `<span class="alias-tag"><span>📞</span>${escapeHtml(v)}</span>`).join('');
+  const emails = (p.email || []).map(v => `<span class="alias-tag"><span>✉️</span>${escapeHtml(v)}</span>`).join('');
+  const ids = (p.customerId || []).map(v => `<span class="alias-tag"><span>🏷️</span>${escapeHtml(v)}</span>`).join('');
+  return `
+    <div class="person-card" style="margin-top:12px">
+      <div class="person-name">${escapeHtml((p.firstName || '') + ' ' + (p.lastName || '')).trim() || '(No Name)'}</div>
+      <div class="person-id">ID: ${escapeHtml(p.id || p.personId || '')}</div>
+      ${phones ? `<div class="alias-group"><div class="alias-group-label">Phone</div>${phones}</div>` : ''}
+      ${emails ? `<div class="alias-group"><div class="alias-group-label">Email</div>${emails}</div>` : ''}
+      ${ids ? `<div class="alias-group"><div class="alias-group-label">Customer ID</div>${ids}</div>` : ''}
+    </div>`;
+}
+
+function clearLookup() {
+  document.getElementById('lookup-identity').value = '';
+  document.getElementById('lookup-result').innerHTML = '';
+  document.getElementById('lookup-actions').style.display = 'none';
+  currentPerson = null;
+}
+
+// Edit person state — tracks pending changes before save
+let editState = { phone: [], email: [], customerId: [] };
+
+function openEditPerson() {
+  if (!currentPerson) return;
+  // Deep copy current aliases into edit state
+  editState = {
+    phone: [...(currentPerson.phone || [])],
+    email: [...(currentPerson.email || [])],
+    customerId: [...(currentPerson.customerId || [])],
+  };
+  document.getElementById('edit-first').value = currentPerson.firstName || '';
+  document.getElementById('edit-last').value = currentPerson.lastName || '';
+  document.getElementById('edit-phone-new').value = '';
+  document.getElementById('edit-email-new').value = '';
+  document.getElementById('edit-custid-new').value = '';
+  document.getElementById('edit-person-result').innerHTML = '';
+  renderEditLists();
+  document.getElementById('edit-person-modal').classList.add('open');
+}
+
+function renderEditLists() {
+  renderEditList('edit-phones-list', 'phone', '📞');
+  renderEditList('edit-emails-list', 'email', '✉️');
+  renderEditList('edit-custids-list', 'customerId', '🏷️');
+}
+
+function renderEditList(containerId, field, icon) {
+  const container = document.getElementById(containerId);
+  if (!editState[field].length) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:4px 0">None</div>`;
+    return;
+  }
+  container.innerHTML = editState[field].map(v => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">${icon}</span>
+      <span style="flex:1;font-size:13px">${escapeHtml(v)}</span>
+      <button class="btn btn-sm btn-danger" onclick="removeEditAlias('${field}', ${JSON.stringify(v)})">Remove</button>
+    </div>`).join('');
+}
+
+function addEditAlias(field) {
+  const inputId = { phone: 'edit-phone-new', email: 'edit-email-new', customerId: 'edit-custid-new' }[field];
+  const val = document.getElementById(inputId).value.trim();
+  if (!val) return;
+  if (editState[field].includes(val)) {
+    document.getElementById('edit-person-result').innerHTML = alert_html('warning', `"${val}" is already in the list.`);
+    return;
+  }
+  editState[field].push(val);
+  document.getElementById(inputId).value = '';
+  document.getElementById('edit-person-result').innerHTML = '';
+  renderEditLists();
+}
+
+function removeEditAlias(field, val) {
+  editState[field] = editState[field].filter(v => v !== val);
+  renderEditLists();
+}
+
+async function saveEditPerson() {
+  if (!currentPerson) return;
+  const result = document.getElementById('edit-person-result');
+  const personId = currentPerson.id || currentPerson.personId;
+  const body = {
+    firstName: document.getElementById('edit-first').value.trim(),
+    lastName: document.getElementById('edit-last').value.trim(),
+    phone: editState.phone,
+    email: editState.email,
+    customerId: editState.customerId,
+  };
+  result.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    // CJDS uses PUT to update an existing person by person ID
+    const updated = await api('PUT', `/admin/v1/api/person/workspace-id/${cfg.workspaceId}/person-id/${personId}`, body);
+    const person = updated.data ? (Array.isArray(updated.data) ? updated.data[0] : updated.data) : updated;
+    currentPerson = { ...currentPerson, ...body, ...person };
+    document.getElementById('lookup-result').innerHTML = renderPersonCard(currentPerson);
+    result.innerHTML = alert_html('success', 'Person updated successfully.');
+    setTimeout(() => closeModal('edit-person-modal'), 900);
+  } catch (e) {
+    // Fallback: try PATCH if PUT not supported
+    try {
+      const patched = await api('PATCH', `/admin/v1/api/person/workspace-id/${cfg.workspaceId}/person-id/${personId}`, body);
+      const person = patched.data ? (Array.isArray(patched.data) ? patched.data[0] : patched.data) : patched;
+      currentPerson = { ...currentPerson, ...body, ...person };
+      document.getElementById('lookup-result').innerHTML = renderPersonCard(currentPerson);
+      result.innerHTML = alert_html('success', 'Person updated successfully.');
+      setTimeout(() => closeModal('edit-person-modal'), 900);
+    } catch (e2) {
+      result.innerHTML = alert_html('error', e2.message);
+    }
+  }
+}
+
+function openMerge() {
+  if (!currentPerson) return;
+  document.getElementById('merge-result').innerHTML = '';
+  document.getElementById('merge-ids').value = '';
+  document.getElementById('merge-modal').classList.add('open');
+}
+
+async function mergePerson() {
+  if (!currentPerson) return;
+  const ids = document.getElementById('merge-ids').value.split(',').map(s => s.trim()).filter(Boolean);
+  const result = document.getElementById('merge-result');
+  if (!ids.length) { result.innerHTML = alert_html('warning', 'Enter at least one person ID.'); return; }
+  try {
+    const personId = currentPerson.id || currentPerson.personId;
+    await api('POST', `/admin/v1/api/person/merge/workspace-id/${cfg.workspaceId}/primary-person-id/${personId}`, { personIdsToMerge: ids });
+    result.innerHTML = alert_html('success', 'Identities merged successfully.');
+  } catch (e) {
+    result.innerHTML = alert_html('error', e.message);
+  }
+}
+
+// ─── Create Person ───────────────────────────────────────────────────────────
+function tagInputKey(e, field) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const input = document.getElementById(`${field}-input`);
+    const val = input.value.trim();
+    if (!val) return;
+    const data = JSON.parse(document.getElementById(`${field}-data`).value);
+    if (!data.includes(val)) {
+      data.push(val);
+      document.getElementById(`${field}-data`).value = JSON.stringify(data);
+      const tag = document.createElement('span');
+      tag.className = 'alias-tag';
+      tag.innerHTML = `${escapeHtml(val)} <span class="remove" onclick="removeTag('${field}','${escapeHtml(val)}',this)">×</span>`;
+      document.getElementById(`${field}-wrapper`).insertBefore(tag, input);
+    }
+    input.value = '';
+  }
+}
+
+function removeTag(field, val, el) {
+  const data = JSON.parse(document.getElementById(`${field}-data`).value).filter(v => v !== val);
+  document.getElementById(`${field}-data`).value = JSON.stringify(data);
+  el.parentElement.remove();
+}
+
+async function createPerson() {
+  const body = {
+    firstName: document.getElementById('cp-first').value.trim(),
+    lastName: document.getElementById('cp-last').value.trim(),
+    phone: JSON.parse(document.getElementById('cp-phones-data').value),
+    email: JSON.parse(document.getElementById('cp-emails-data').value),
+    customerId: JSON.parse(document.getElementById('cp-custids-data').value),
+  };
+  const result = document.getElementById('create-result');
+  if (!body.phone.length && !body.email.length && !body.customerId.length) {
+    result.innerHTML = alert_html('warning', 'Add at least one phone, email, or customer ID.');
+    return;
+  }
+  result.innerHTML = '<span class="spinner"></span> Creating...';
+  try {
+    const data = await api('POST', `/admin/v1/api/person/workspace-id/${cfg.workspaceId}`, body);
+    result.innerHTML = alert_html('success', `Person created: ${data.id || data.personId || JSON.stringify(data)}`);
+  } catch (e) {
+    result.innerHTML = alert_html('error', e.message);
+  }
+}
+
+function clearCreate() {
+  ['cp-first','cp-last','cp-phones-input','cp-emails-input','cp-custids-input'].forEach(id => document.getElementById(id).value = '');
+  ['cp-phones','cp-emails','cp-custids'].forEach(field => {
+    document.getElementById(`${field}-data`).value = '[]';
+    const wrapper = document.getElementById(`${field}-wrapper`);
+    wrapper.querySelectorAll('.alias-tag').forEach(t => t.remove());
+  });
+  document.getElementById('create-result').innerHTML = '';
+}
+
+// ─── Post Event ──────────────────────────────────────────────────────────────
+// ─── Post Event helpers ──────────────────────────────────────────────────────
+const PE_EVENT_DEFAULTS = {
+  'task:new':        { channel: 'telephony', icon: 'telephony', title: 'New Task',           subtitle: 'Incoming contact task created' },
+  'task:ended':      { channel: 'telephony', icon: 'telephony', title: 'Task Ended',          subtitle: 'Contact task completed' },
+  'task:updated':    { channel: 'telephony', icon: 'telephony', title: 'Task Updated',        subtitle: 'Task details changed' },
+  'web:pagevisit':   { channel: 'web',       icon: 'web',       title: 'Page Visit',          subtitle: 'Customer visited a web page' },
+  'web:download':    { channel: 'web',       icon: 'web',       title: 'File Download',       subtitle: 'Customer downloaded a file' },
+  'web:formsubmit':  { channel: 'web',       icon: 'web',       title: 'Form Submitted',      subtitle: 'Customer submitted a web form' },
+  'email:sent':      { channel: 'email',     icon: 'email',     title: 'Email Sent',          subtitle: 'Outbound email delivered' },
+  'email:opened':    { channel: 'email',     icon: 'email',     title: 'Email Opened',        subtitle: 'Customer opened an email' },
+  'email:clicked':   { channel: 'email',     icon: 'email',     title: 'Email Link Clicked',  subtitle: 'Customer clicked a link in email' },
+  'sms:sent':        { channel: 'sms',       icon: 'sms',       title: 'SMS Sent',            subtitle: 'Outbound SMS delivered' },
+  'sms:received':    { channel: 'sms',       icon: 'sms',       title: 'SMS Received',        subtitle: 'Customer replied via SMS' },
+  'chat:started':    { channel: 'chat',      icon: 'chat',      title: 'Chat Started',        subtitle: 'Customer initiated a chat session' },
+  'chat:ended':      { channel: 'chat',      icon: 'chat',      title: 'Chat Ended',          subtitle: 'Chat session completed' },
+  'social:mention':  { channel: 'social',    icon: 'social',    title: 'Social Mention',      subtitle: 'Customer mentioned the brand on social media' },
+  'custom:event':    { channel: 'custom',    icon: 'custom',    title: 'Custom Event',        subtitle: 'A custom journey event occurred' },
+};
+
+function applyEventTypeDefaults() {
+  const type = document.getElementById('pe-type').value;
+  const d = PE_EVENT_DEFAULTS[type];
+  if (!d) return;
+  setSelectValue('pe-channel', d.channel);
+  setSelectValue('pe-icontype', d.icon);
+  document.getElementById('pe-title').value = d.title;
+  document.getElementById('pe-subtitle').value = d.subtitle;
+}
+
+function setSelectValue(id, value) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  for (const opt of sel.options) {
+    if (opt.value === value) { sel.value = value; return; }
+  }
+}
+
+// Mirror identity → origin whenever origin hasn't been manually edited.
+// We track this with a flag on the input element itself.
+function autoDetectIdentityType() {
+  const val = document.getElementById('pe-identity').value.trim();
+  const sel = document.getElementById('pe-identitytype');
+  if (!sel) return;
+  if (val.startsWith('+')) sel.value = 'phone';
+  else if (val.includes('@')) sel.value = 'email';
+}
+
+function syncOriginFromIdentity() {
+  const originEl = document.getElementById('pe-origin');
+  if (originEl.dataset.manuallyEdited) return;
+  originEl.value = document.getElementById('pe-identity').value;
+}
+
+// One-time setup: mark origin as manually edited if user types in it directly,
+// and reset the flag when the field is cleared.
+(function initOriginTracking() {
+  const originEl = document.getElementById('pe-origin');
+  if (!originEl) return;
+  originEl.addEventListener('input', () => {
+    originEl.dataset.manuallyEdited = originEl.value ? '1' : '';
+  });
+})();
+
+async function postEvent() {
+  const identity = document.getElementById('pe-identity').value.trim();
+  const identitytype = document.getElementById('pe-identitytype').value;
+  const type = document.getElementById('pe-type').value;
+  const channelType = document.getElementById('pe-channel').value;
+  const iconType = document.getElementById('pe-icontype').value;
+  const title = document.getElementById('pe-title').value.trim();
+  const subtitle = document.getElementById('pe-subtitle').value.trim();
+  const origin = document.getElementById('pe-origin').value.trim() || identity;
+  const hidden = document.getElementById('pe-hidden').checked;
+  const taskIdRaw = document.getElementById('pe-taskid').value.trim();
+  const taskId = taskIdRaw || uuid();
+  const customDataRaw = document.getElementById('pe-customdata').value.trim();
+  const result = document.getElementById('post-event-result');
+
+  if (!identity) { result.innerHTML = alert_html('warning', 'Identity is required.'); return; }
+
+  let extraData = {};
+  if (customDataRaw) {
+    try { extraData = JSON.parse(customDataRaw); } catch { result.innerHTML = alert_html('error', 'Invalid JSON in Custom Data.'); return; }
+  }
+
+  const body = {
+    id: uuid(),
+    specversion: '1.0',
+    type,
+    source: 'jds-web-manager',
+    identity,
+    identitytype,
+    datacontenttype: 'application/json',
+    data: {
+      taskId,
+      origin,
+      channelType,
+      uiData: {
+        title,
+        iconType,
+        subTitle: subtitle,
+        ...(hidden ? { hidden: true } : {}),
+      },
+      ...extraData,
+    },
+  };
+
+  result.innerHTML = '<span class="spinner"></span> Posting...';
+  try {
+    await api('POST', `/publish/v1/api/event?workspaceId=${cfg.workspaceId}`, body);
+    saveRecentIdentity(identity);
+    result.innerHTML = alert_html('success', `Event posted. Task ID: ${taskId}`);
+  } catch (e) {
+    result.innerHTML = alert_html('error', e.message);
+  }
+}
+
+function clearPostEvent() {
+  ['pe-identity','pe-title','pe-subtitle','pe-taskid','pe-customdata'].forEach(id => document.getElementById(id).value = '');
+  const originEl = document.getElementById('pe-origin');
+  originEl.value = '';
+  originEl.dataset.manuallyEdited = '';
+  document.getElementById('pe-hidden').checked = false;
+  document.getElementById('post-event-result').innerHTML = '';
+}
+
+// ─── Event History ──────────────────────────────────────────────────────────
+async function fetchHistory() {
+  const identity = document.getElementById('eh-identity').value.trim();
+  const pageSize = document.getElementById('eh-pagesize').value;
+  const typeFilter = document.getElementById('eh-typefilter').value.trim();
+  const dataFilter = document.getElementById('eh-datafilter').value.trim();
+  const result = document.getElementById('history-result');
+  if (!identity) { result.innerHTML = alert_html('warning', 'Identity is required.'); return; }
+  result.innerHTML = '<div style="padding:8px 0"><span class="spinner"></span> Fetching events...</div>';
+  closeAllIdentityDropdowns();
+  try {
+    let path = `/v1/api/events/workspace-id/${cfg.workspaceId}?identity=${encodeURIComponent(identity)}&pageSize=${pageSize}&sort=desc`;
+    if (typeFilter) path += `&filter=type=='${encodeURIComponent(typeFilter)}'`;
+    if (dataFilter) path += `&data=${encodeURIComponent(dataFilter)}`;
+    const data = await api('GET', path);
+    const events = data.events || data.data || data || [];
+    if (!events.length) { result.innerHTML = alert_html('info', 'No events found for this identity.'); return; }
+    saveRecentIdentity(identity);
+    result.innerHTML = renderHistoryTable(events);
+  } catch (e) {
+    result.innerHTML = alert_html('error', e.message);
+  }
+}
+
+function renderHistoryTable(events) {
+  const rows = events.map(ev => {
+    const ch = (ev.data && ev.data.channelType) || 'custom';
+    const title = (ev.data && ev.data.uiData && ev.data.uiData.title) || ev.type || '';
+    const sub = (ev.data && ev.data.uiData && ev.data.uiData.subTitle) || '';
+    return `<tr>
+      <td><span class="badge badge-${channelClass(ch)}">${channelIcon(ch)} ${escapeHtml(ch)}</span></td>
+      <td>${escapeHtml(ev.type || '')}</td>
+      <td>${escapeHtml(title)}<br><span style="color:var(--text-muted);font-size:11px">${escapeHtml(sub)}</span></td>
+      <td style="font-size:11px;color:var(--text-muted)">${formatDate(ev.time || ev.timestamp)}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="showEventJson(${escapeHtml(JSON.stringify(JSON.stringify(ev)))})">JSON</button></td>
+    </tr>`;
+  }).join('');
+  return `<div class="card" style="padding:0;overflow:hidden">
+    <table>
+      <thead><tr><th>Channel</th><th>Type</th><th>Title</th><th>Time</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="padding:8px 12px;font-size:12px;color:var(--text-muted)">${events.length} event(s)</div>
+  </div>`;
+}
+
+function showEventJson(jsonStr) {
+  const pretty = JSON.stringify(JSON.parse(jsonStr), null, 2);
+  alert(pretty);
+}
+
+function clearHistory() {
+  ['eh-identity','eh-typefilter','eh-datafilter'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('history-result').innerHTML = '';
+}
+
+// ─── Profile Templates ──────────────────────────────────────────────────────
+async function fetchTemplates() {
+  const result = document.getElementById('templates-result');
+  result.innerHTML = '<div><span class="spinner"></span> Loading...</div>';
+  try {
+    const data = await api('GET', `/admin/v1/api/profile-view-template/workspace-id/${cfg.workspaceId}`);
+    debugLog('info', 'Profile templates raw response: ' + JSON.stringify(data));
+
+    let templates = [];
+    if (Array.isArray(data)) {
+      templates = data;
+    } else if (Array.isArray(data.templates)) {
+      templates = data.templates;
+    } else if (Array.isArray(data.data)) {
+      templates = data.data;
+    } else if (Array.isArray(data.items)) {
+      templates = data.items;
+    } else if (data && typeof data === 'object') {
+      result.innerHTML = alert_html('info', 'Unexpected response shape. Check debug panel (🐛) for raw data.') +
+        `<pre style="font-size:11px;background:var(--surface2);padding:10px;border-radius:6px;overflow-x:auto;white-space:pre-wrap;margin-top:8px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+      return;
+    }
+
+    if (!templates.length) { result.innerHTML = alert_html('info', 'No templates found.'); return; }
+    const rows = templates.map(t => {
+      const name = t.name || t.templateName || '';
+      const tid  = t.id  || t.templateId  || '';
+      const isDefault = name === 'journey-default-template';
+      const actions = isDefault
+        ? `<div class="btn-group">
+             <button class="btn btn-sm btn-secondary" onclick="viewTemplate(${escapeHtml(JSON.stringify(JSON.stringify(t)))})">👁 View</button>
+           </div>`
+        : `<div class="btn-group">
+             <button class="btn btn-sm btn-secondary" onclick="editTemplate('${escapeHtml(tid)}',${escapeHtml(JSON.stringify(JSON.stringify(t)))})">✏️ Edit</button>
+             <button class="btn btn-sm btn-danger" onclick="deleteTemplate('${escapeHtml(tid)}')">🗑 Delete</button>
+           </div>`;
+      return `
+        <tr>
+          <td><strong>${escapeHtml(name)}</strong>${isDefault ? ' <span style="font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--text-muted)">default</span>' : ''}</td>
+          <td style="font-size:11px;color:var(--text-muted);font-family:monospace">${escapeHtml(tid)}</td>
+          <td>${actions}</td>
+        </tr>`;
+    }).join('');
+    result.innerHTML = `<div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Name</th><th>ID</th><th>Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  } catch (e) {
+    result.innerHTML = alert_html('error', e.message);
+  }
+}
+
+function openCreateTemplate() {
+  currentTemplateId = null;
+  document.getElementById('template-modal-title').textContent = '➕ New Profile Template';
+  document.getElementById('tmpl-name').value = '';
+  document.getElementById('tmpl-name').readOnly = false;
+  document.getElementById('tmpl-json').value = JSON.stringify({ name: '', attributes: [] }, null, 2);
+  document.getElementById('tmpl-json').readOnly = false;
+  document.getElementById('tmpl-result').innerHTML = '';
+  document.getElementById('tmpl-readonly-banner').style.display = 'none';
+  document.getElementById('tmpl-save-btn').style.display = '';
+  document.getElementById('template-modal').classList.add('open');
+}
+
+function viewTemplate(jsonStr) {
+  const obj = JSON.parse(jsonStr);
+  document.getElementById('template-modal-title').textContent = '👁 View Template';
+  document.getElementById('tmpl-name').value = obj.name || obj.templateName || '';
+  document.getElementById('tmpl-name').readOnly = true;
+  document.getElementById('tmpl-json').value = JSON.stringify(obj, null, 2);
+  document.getElementById('tmpl-json').readOnly = true;
+  document.getElementById('tmpl-result').innerHTML = '';
+  document.getElementById('tmpl-readonly-banner').style.display = '';
+  document.getElementById('tmpl-save-btn').style.display = 'none';
+  document.getElementById('template-modal').classList.add('open');
+}
+
+function editTemplate(id, jsonStr) {
+  currentTemplateId = id;
+  const obj = JSON.parse(jsonStr);
+  document.getElementById('template-modal-title').textContent = '✏️ Edit Template';
+  document.getElementById('tmpl-name').value = obj.name || obj.templateName || '';
+  document.getElementById('tmpl-name').readOnly = false;
+  document.getElementById('tmpl-json').value = JSON.stringify(obj, null, 2);
+  document.getElementById('tmpl-json').readOnly = false;
+  document.getElementById('tmpl-result').innerHTML = '';
+  document.getElementById('tmpl-readonly-banner').style.display = 'none';
+  document.getElementById('tmpl-save-btn').style.display = '';
+  document.getElementById('template-modal').classList.add('open');
+}
+
+async function saveTemplate() {
+  const name = document.getElementById('tmpl-name').value.trim();
+  const jsonRaw = document.getElementById('tmpl-json').value.trim();
+  const result = document.getElementById('tmpl-result');
+  if (!name) { result.innerHTML = alert_html('warning', 'Template name is required.'); return; }
+  let parsed;
+  try { parsed = JSON.parse(jsonRaw); } catch (e) { result.innerHTML = alert_html('error', 'Invalid JSON: ' + e.message); return; }
+
+  // Strip read-only / server-generated fields the API rejects on create/update
+  const { id, createdAt, createdBy, updatedAt, updatedBy, organizationId, workspaceId, version: _v, logic, ...body } = parsed;
+  body.name = name;
+
+  // Strip rules from each attribute (rules requires a top-level logic field we don't support)
+  if (Array.isArray(body.attributes)) {
+    body.attributes = body.attributes.map(({ rules, ...attr }) => ({ ...attr, rules: null }));
+  }
+
+  result.innerHTML = '<span class="spinner"></span>';
+  try {
+    if (currentTemplateId) {
+      await api('PUT', `/admin/v1/api/profile-view-template/workspace-id/${cfg.workspaceId}/template-id/${currentTemplateId}`, body);
+      result.innerHTML = alert_html('success', 'Template updated.');
+    } else {
+      await api('POST', `/admin/v1/api/profile-view-template/workspace-id/${cfg.workspaceId}`, body);
+      result.innerHTML = alert_html('success', 'Template created.');
+    }
+    setTimeout(() => { closeModal('template-modal'); fetchTemplates(); }, 800);
+  } catch (e) {
+    const apiResp = e.responseBody
+      ? `\nAPI response (${e.status}):\n${JSON.stringify(e.responseBody, null, 2)}`
+      : '';
+    result.innerHTML = alert_html('error', e.message) +
+      `<pre style="font-size:10px;background:var(--surface2);padding:8px;border-radius:4px;margin-top:6px;white-space:pre-wrap;overflow-x:auto">${escapeHtml('Sent body:\n' + JSON.stringify(body, null, 2) + apiResp)}</pre>`;
+  }
+}
+
+async function deleteTemplate(id) {
+  if (id === 'journey-default-template') { alert('The journey-default-template is a system template and cannot be deleted.'); return; }
+  if (!confirm(`Delete template ${id}?`)) return;
+  const result = document.getElementById('templates-result');
+  try {
+    await api('DELETE', `/admin/v1/api/profile-view-template/workspace-id/${cfg.workspaceId}/template-id/${id}`);
+    fetchTemplates();
+  } catch (e) {
+    result.innerHTML = alert_html('error', e.message);
+  }
+}
+
+// ─── Journey Timeline Prototype ─────────────────────────────────────────────
+
+let protoEvents = [];              // raw CJDS events
+let protoSelected = null;          // currently selected event object
+let protoCollapsedChannels = new Set(); // channels currently collapsed
+let protoSlotIndex = {};           // minuteKey -> slot index; rebuilt on each render
+const pipTooltipData = new Map();       // keyed by pipId → tooltip data (avoids inline HTML attr encoding)
+
+function protoToggleChannel(ch) {
+  if (protoCollapsedChannels.has(ch)) protoCollapsedChannels.delete(ch);
+  else protoCollapsedChannels.add(ch);
+  renderProtoTimeline();
+}
+
+// Scroll the unified timeline to the given slot column index.
+// If any event lives in that slot, select the first one.
+function protoScrollToSlot(slotIdx) {
+  const scrollWrap = document.querySelector('.proto-tl-scroll');
+  if (!scrollWrap) return;
+
+  // Find the time-axis cell for this slot — its position tells us exactly where the column is.
+  const axisCell = scrollWrap.querySelector(`.proto-axis-time[data-slot-idx="${slotIdx}"]`);
+  if (axisCell) {
+    const wrapRect  = scrollWrap.getBoundingClientRect();
+    const cellRect  = axisCell.getBoundingClientRect();
+    const targetLeft = scrollWrap.scrollLeft + (cellRect.left - wrapRect.left) - (wrapRect.width / 2) + (cellRect.width / 2);
+    scrollWrap.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+  }
+
+  // If an event card exists in this slot, select the first one
+  const card = scrollWrap.querySelector(`.proto-card[data-idx]`);  // fallback
+  // Find the first card whose grid column matches slotIdx+2 — easier to find via data-idx
+  // We look for all cards and pick the first whose parent cell sits at grid-column slotIdx+2.
+  // Simpler: find the proto-cell at the right grid-column and grab its first card.
+  const targetGridCol = slotIdx + 2;
+  const cells = scrollWrap.querySelectorAll(`.proto-cell`);
+  for (const cell of cells) {
+    const col = getComputedStyle(cell).gridColumn || cell.style.gridColumn;
+    // style.gridColumn is set inline, e.g. "4"
+    if (parseInt(cell.style.gridColumn) === targetGridCol) {
+      const firstCard = cell.querySelector('.proto-card');
+      if (firstCard) {
+        const idx = parseInt(firstCard.dataset.idx, 10);
+        if (!isNaN(idx)) protoSelectEvent(idx);
+      }
+      break;
+    }
+  }
+}
+
+// Delegated click handler for timeline — handles label toggles, collapsed cells, and pip dots
+// Uses data attributes to avoid inline JS string-escaping bugs
+document.addEventListener('click', function(e) {
+  // Pip dot — expand channel and select event
+  const pip = e.target.closest('[data-expand-ch]');
+  if (pip) {
+    e.stopPropagation();
+    pipHideTooltip();
+    const ch  = pip.dataset.expandCh;
+    const idx = parseInt(pip.dataset.selectIdx, 10);
+    protoCollapsedChannels.delete(ch);
+    protoSelectEvent(idx);
+    return;
+  }
+  // Time/date axis click — scroll timeline to that slot (and select nearest event)
+  const axisCell = e.target.closest('[data-slot-idx]');
+  if (axisCell && !e.target.closest('[data-toggle-ch]') && !e.target.closest('[data-expand-ch]')) {
+    const slotIdx = parseInt(axisCell.dataset.slotIdx, 10);
+    protoScrollToSlot(slotIdx);
+    return;
+  }
+  // Channel label or collapsed cell — toggle collapse
+  const toggle = e.target.closest('[data-toggle-ch]');
+  if (toggle) {
+    const ch = toggle.dataset.toggleCh;
+    protoToggleChannel(ch);
+  }
+});
+
+// ── Pip tooltip (fixed-position, escapes overflow clipping) ──────────────────
+function pipShowTooltip(el) {
+  const tip = document.getElementById('pip-tooltip-overlay');
+  if (!tip) return;
+  const d = pipTooltipData.get(el.dataset.pipId);
+  if (!d) return;
+  const bodyText = d.subtitle || d.evType;
+  tip.innerHTML = `<div class="pip-tt-time">${d.sentIcon} ${escapeHtml(d.timeLabel)}</div>
+    <div class="pip-tt-title">${escapeHtml(d.title)}</div>
+    <div class="pip-tt-type">${escapeHtml(bodyText)}</div>
+    <div class="pip-tt-hint">Click to expand &amp; select</div>`;
+  tip.classList.add('visible');
+  pipPositionTooltip(el);
+}
+function pipPositionTooltip(el) {
+  const tip  = document.getElementById('pip-tooltip-overlay');
+  if (!tip) return;
+  const rect = el.getBoundingClientRect();
+  const tw   = tip.offsetWidth;
+  const th   = tip.offsetHeight;
+  // Centre above the pip; clamp to viewport edges
+  let left = rect.left + rect.width / 2 - tw / 2;
+  let top  = rect.top - th - 10;
+  if (left < 6) left = 6;
+  if (left + tw > window.innerWidth - 6) left = window.innerWidth - tw - 6;
+  if (top < 6) top = rect.bottom + 10; // flip below if not enough room above
+  tip.style.left = left + 'px';
+  tip.style.top  = top  + 'px';
+}
+function pipHideTooltip() {
+  const tip = document.getElementById('pip-tooltip-overlay');
+  if (tip) tip.classList.remove('visible');
+}
+
+const PROTO_CHANNELS = {
+  telephony: { label: 'Voice',           icon: '📞' },
+  chat:      { label: 'Chat / Messaging',icon: '💬' },
+  email:     { label: 'Email',           icon: '📧' },
+  web:       { label: 'Web',             icon: '🌐' },
+  sms:       { label: 'SMS',             icon: '📱' },
+  social:    { label: 'Social',          icon: '📣' },
+  custom:    { label: 'Other',           icon: '⚙️'  },
+};
+
+// Channel colors for minimap
+const PROTO_CH_COLORS = {
+  telephony: '#6366f1',
+  chat:      '#0ea5e9',
+  email:     '#f59e0b',
+  web:       '#10b981',
+  sms:       '#ec4899',
+  social:    '#8b5cf6',
+  custom:    '#64748b',
+};
+
+// Derive a rough sentiment from event type
+function protoSentiment(ev) {
+  const t = (ev.type || '').toLowerCase();
+  if (/ended|disconnect|abandon|fail|error/.test(t)) return 'negative';
+  if (/connected|completed|resolved|success|confirm/.test(t)) return 'positive';
+  return 'neutral';
+}
+
+// Short outcome label from event type
+function protoOutcome(ev) {
+  const t = (ev.type || '').toLowerCase();
+  if (/new|start|visit|open/.test(t)) return 'Started';
+  if (/ended|disconnect/.test(t)) return 'Ended';
+  if (/connected|answered/.test(t)) return 'Connected';
+  if (/completed|resolved/.test(t)) return 'Resolved';
+  if (/transfer|escalat/.test(t)) return 'Escalated';
+  if (/abandon/.test(t)) return 'Abandoned';
+  return 'Event';
+}
+
+async function fetchProtoTimeline() {
+  const identity = document.getElementById('proto-identity').value.trim();
+  const result   = document.getElementById('proto-result');
+  if (!identity) { result.innerHTML = alert_html('warning', 'Identity is required.'); return; }
+  result.innerHTML = '<div style="padding:8px 0"><span class="spinner"></span> Loading timeline...</div>';
+  closeAllIdentityDropdowns();
+  try {
+    const path = `/v1/api/events/workspace-id/${cfg.workspaceId}?identity=${encodeURIComponent(identity)}&pageSize=200&sort=asc`;
+    const data  = await api('GET', path);
+    protoEvents  = (data.events || data.data || data || [])
+      .sort((a, b) => new Date(a.time || a.timestamp) - new Date(b.time || b.timestamp));
+    protoSelected = protoEvents[0] || null;
+    saveRecentIdentity(identity);
+    renderProtoTimeline();
+  } catch (e) {
+    result.innerHTML = alert_html('error', e.message);
+  }
+}
+
+function renderProtoTimeline() {
+  pipTooltipData.clear();
+  const result = document.getElementById('proto-result');
+  if (!protoEvents.length) {
+    result.innerHTML = `<div class="proto-empty">No events found for this identity.</div>`;
+    return;
+  }
+
+  // ── Metrics ──────────────────────────────────────────────────────────────
+  const channels    = protoEvents.map(ev => channelClass((ev.data && ev.data.channelType) || 'custom'));
+  const uniqueCh    = new Set(channels).size;
+  const firstTs     = protoEvents[0].time || protoEvents[0].timestamp;
+  const lastTs      = protoEvents[protoEvents.length - 1].time || protoEvents[protoEvents.length - 1].timestamp;
+
+  const headerHtml = `
+    <div class="proto-header-card">
+      <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);margin:0 0 4px">Omnichannel Customer Journey</p>
+      <h3>${escapeHtml(document.getElementById('proto-identity').value.trim())}</h3>
+      <p>${formatDate(firstTs)} → ${formatDate(lastTs)}</p>
+      <div class="proto-metrics">
+        <div class="proto-metric"><div class="proto-metric-label">Total Events</div><div class="proto-metric-value">${protoEvents.length}</div></div>
+        <div class="proto-metric"><div class="proto-metric-label">Channels</div><div class="proto-metric-value">${uniqueCh}</div></div>
+      </div>
+    </div>`;
+
+  // ── Build unified time-slot axis ─────────────────────────────────────────
+  // Each distinct calendar date gets a date bucket.
+  // Within each date, each event gets its own "minute bucket" = YYYY-MM-DD HH:MM
+  // so events at the same minute share a column; different minutes get separate columns.
+
+  // Pass 1 — collect all unique (date, minuteKey) pairs in chronological order
+  const dateOrder  = [];       // unique date strings (YYYY-MM-DD) in order
+  const dateSlots  = {};       // dateStr -> [minuteKey, ...]   ordered
+  const slotSet    = {};       // dateStr -> Set of minuteKeys
+
+  protoEvents.forEach(ev => {
+    const ts = ev.time || ev.timestamp;
+    if (!ts) return;
+    const d  = new Date(ts);
+    const dateStr = d.toISOString().slice(0, 10);           // YYYY-MM-DD
+    const minuteKey = dateStr + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }); // YYYY-MM-DD HH:MM
+
+    if (!slotSet[dateStr]) { slotSet[dateStr] = new Set(); dateSlots[dateStr] = []; dateOrder.push(dateStr); }
+    if (!slotSet[dateStr].has(minuteKey)) { slotSet[dateStr].add(minuteKey); dateSlots[dateStr].push(minuteKey); }
+  });
+
+  // Flat ordered list of all slots: [{ dateStr, minuteKey, slotIdx }, ...]
+  const allSlots = [];
+  dateOrder.forEach(dateStr => {
+    dateSlots[dateStr].forEach(minuteKey => allSlots.push({ dateStr, minuteKey }));
+  });
+  const slotIndex = {};  // minuteKey -> index in allSlots
+  allSlots.forEach((s, i) => { slotIndex[s.minuteKey] = i; });
+  protoSlotIndex = slotIndex; // expose for protoSelectEvent scroll-to-column
+
+  // Pass 2 — collect channels (row order = first appearance)
+  const laneOrder = [];
+  const laneMap   = {};
+  protoEvents.forEach(ev => {
+    const ch = channelClass((ev.data && ev.data.channelType) || 'custom');
+    if (!laneMap[ch]) { laneMap[ch] = []; laneOrder.push(ch); }
+    laneMap[ch].push(ev);
+  });
+
+  // ── Build CSS grid ───────────────────────────────────────────────────────
+  // Grid columns: col 1 = label (120px sticky), cols 2..N+1 = one per slot (minmax 100px,1fr)
+  const nSlots = allSlots.length;
+  const gridCols = `120px repeat(${nSlots}, minmax(100px, 1fr))`;
+  // Grid rows: row 1 = date axis, row 2 = time axis, rows 3..M+2 = channel lanes
+  // (corner cell spans rows 1-2)
+
+  // ── Date axis cells (row 1, cols 2..N+1 grouped by date) ────────────────
+  let dateAxisHtml = '';
+  let colOffset = 2; // 1-indexed grid col start
+  dateOrder.forEach(dateStr => {
+    const spanCount = dateSlots[dateStr].length;
+    const label = new Date(dateStr + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    dateAxisHtml += `<div class="proto-axis-date" style="grid-column:${colOffset}/span ${spanCount};grid-row:1" data-slot-idx="${colOffset - 2}">📅 ${escapeHtml(label)}</div>`;
+    colOffset += spanCount;
+  });
+
+  // ── Time axis cells (row 2, one per slot) ───────────────────────────────
+  let timeAxisHtml = allSlots.map((s, i) => {
+    const timePart = s.minuteKey.slice(11); // HH:MM
+    return `<div class="proto-axis-time" style="grid-column:${i + 2};grid-row:2" data-slot-idx="${i}">${escapeHtml(timePart)}</div>`;
+  }).join('');
+
+  // ── Channel rows ─────────────────────────────────────────────────────────
+  const selectedIdx = protoSelected ? protoEvents.indexOf(protoSelected) : -1;
+
+  const laneRowsHtml = laneOrder.map((ch, rowNum) => {
+    const meta      = PROTO_CHANNELS[ch] || { label: ch, icon: '⚙️' };
+    const color     = PROTO_CH_COLORS[ch] || PROTO_CH_COLORS.custom;
+    const gridRow   = rowNum + 3;
+    const stripe    = rowNum % 2 === 1;
+    const collapsed = protoCollapsedChannels.has(ch);
+    const toggleIcon = collapsed ? '▶' : '▼';
+
+    // Map slot index -> events for this channel
+    const cellMap = {};
+    laneMap[ch].forEach(ev => {
+      const ts = ev.time || ev.timestamp;
+      if (!ts) return;
+      const d = new Date(ts);
+      const dateStr   = d.toISOString().slice(0, 10);
+      const minuteKey = dateStr + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const si = slotIndex[minuteKey];
+      if (si === undefined) return;
+      if (!cellMap[si]) cellMap[si] = [];
+      cellMap[si].push(ev);
+    });
+
+    // Label cell — always visible, click toggles collapse
+    const labelCell = `<div class="proto-ch-label" style="grid-column:1;grid-row:${gridRow}" data-toggle-ch="${escapeHtml(ch)}">
+      <span class="proto-ch-toggle">${toggleIcon}</span>
+      ${meta.icon} ${escapeHtml(meta.label)}
+    </div>`;
+
+    let cellsHtml;
+    if (collapsed) {
+      // Collapsed: compact pip-dot row — click pip selects event AND expands channel
+      cellsHtml = allSlots.map((s, si) => {
+        const evs = cellMap[si] || [];
+        const bgClass = stripe ? ' proto-cell-stripe' : '';
+        const pips = evs.map(ev => {
+          const idx        = protoEvents.indexOf(ev);
+          const isSelected = idx === selectedIdx;
+          const title      = (ev.data && ev.data.uiData && ev.data.uiData.title) || ev.type || 'Event';
+          const subtitle   = (ev.data && ev.data.uiData && ev.data.uiData.subTitle) || '';
+          const ts         = ev.time || ev.timestamp;
+          const timeLabel  = ts ? new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '';
+          const sentiment  = protoSentiment(ev);
+          const sentIcon   = sentiment === 'negative' ? '⚠️' : sentiment === 'positive' ? '✅' : '🕐';
+          const pipId = 'pip_' + idx + '_' + si;
+          pipTooltipData.set(pipId, { timeLabel, sentIcon, title, subtitle, evType: ev.type || '' });
+          return `<div class="proto-pip${isSelected ? ' selected' : ''}" style="background:${color}"
+            data-pip-id="${pipId}" data-expand-ch="${escapeHtml(ch)}" data-select-idx="${idx}"
+            onmouseenter="pipShowTooltip(this)"
+            onmouseleave="pipHideTooltip()"></div>`;
+        }).join('');
+        // Clicking an empty collapsed cell expands the channel
+        return `<div class="proto-cell-collapsed${bgClass}" style="grid-column:${si + 2};grid-row:${gridRow};cursor:pointer" data-toggle-ch="${escapeHtml(ch)}">${pips}</div>`;
+      }).join('');
+    } else {
+      // Expanded: full event cards
+      cellsHtml = allSlots.map((s, si) => {
+        const evs = cellMap[si] || [];
+        const bgClass = stripe ? ' proto-cell-stripe' : '';
+        const cardsHtml = evs.map(ev => {
+          const idx       = protoEvents.indexOf(ev);
+          const title     = (ev.data && ev.data.uiData && ev.data.uiData.title) || ev.type || 'Event';
+          const ts        = ev.time || ev.timestamp;
+          const timeLabel = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+          const sentiment = protoSentiment(ev);
+          const outcome   = protoOutcome(ev);
+          const isSelected = idx === selectedIdx;
+          const icon = sentiment === 'negative' ? '⚠️' : sentiment === 'positive' ? '✅' : '🕐';
+          return `<div class="proto-card${isSelected ? ' selected' : ''}" data-idx="${idx}" onclick="protoSelectEvent(${idx})">
+            <div class="proto-card-top">
+              <span class="proto-card-time">${escapeHtml(timeLabel)}</span>
+              <span class="proto-outcome-badge ${sentiment}">${icon} ${escapeHtml(outcome)}</span>
+            </div>
+            <div class="proto-card-title">${escapeHtml(title)}</div>
+          </div>`;
+        }).join('');
+        return `<div class="proto-cell${bgClass}" style="grid-column:${si + 2};grid-row:${gridRow}">${cardsHtml}</div>`;
+      }).join('');
+    }
+
+    return labelCell + cellsHtml;
+  }).join('');
+
+  // ── Minimap ───────────────────────────────────────────────────────────────
+  const minimapSegs = protoEvents.map((ev, i) => {
+    const ch    = channelClass((ev.data && ev.data.channelType) || 'custom');
+    const color = PROTO_CH_COLORS[ch] || PROTO_CH_COLORS.custom;
+    const isActive = i === selectedIdx;
+    const ts    = ev.time || ev.timestamp;
+    const d     = ts ? new Date(ts) : null;
+    const dateStr  = d ? d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+    const timeStr  = d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    const evName   = (ev.data && ev.data.uiData && ev.data.uiData.title) || ev.type || 'Event';
+    const chanMeta = PROTO_CHANNELS[ch] || { label: ch, icon: '⚙️' };
+    return `<div class="proto-minimap-seg${isActive ? ' mm-active' : ''}" style="background:${color}"
+      onclick="protoSelectEvent(${i})">
+      <div class="mm-tooltip">
+        <div class="mm-tooltip-date">${escapeHtml(dateStr)}</div>
+        <div class="mm-tooltip-time">${escapeHtml(timeStr)}</div>
+        <div class="mm-tooltip-event">${escapeHtml(evName)}</div>
+        <div class="mm-tooltip-ch">${chanMeta.icon} ${escapeHtml(chanMeta.label)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const legendItems = laneOrder.map(ch => {
+    const meta  = PROTO_CHANNELS[ch] || { label: ch, icon: '⚙️' };
+    const color = PROTO_CH_COLORS[ch] || PROTO_CH_COLORS.custom;
+    return `<span class="proto-minimap-legend-item">
+      <span class="proto-minimap-legend-dot" style="background:${color}"></span>
+      ${meta.icon} ${escapeHtml(meta.label)}
+    </span>`;
+  }).join('');
+
+  const minimapHtml = `
+    <div class="proto-minimap-wrap">
+      <h4>Journey Overview</h4>
+      <div class="proto-minimap" id="proto-minimap">${minimapSegs}</div>
+      <div class="proto-minimap-legend">${legendItems}</div>
+    </div>`;
+
+  // ── Assemble ──────────────────────────────────────────────────────────────
+  const detailHtml = protoDetailHtml();
+
+  result.innerHTML = `
+    <div class="proto-body">
+      <div class="proto-body-left">
+        ${headerHtml}
+        <div class="proto-tl-wrap">
+          <h4>Unified Timeline</h4>
+          <p>Channels as rows · time slots as columns · scroll left/right to navigate</p>
+          <div class="proto-tl-scroll">
+            <div class="proto-tl-grid" style="grid-template-columns:${gridCols}">
+              <div class="proto-corner" style="grid-column:1;grid-row:1/3">Channel</div>
+              ${dateAxisHtml}
+              ${timeAxisHtml}
+              ${laneRowsHtml}
+            </div>
+          </div>
+        </div>
+        ${minimapHtml}
+      </div>
+      <div class="proto-aside">
+        <div id="proto-detail-panel">${detailHtml}</div>
+        <div class="proto-rules-card">
+          <h4>Display Guide</h4>
+          <ul>
+            <li><strong>Rows</strong> = channels; <strong>columns</strong> = time slots.</li>
+            <li><strong>Scroll left/right</strong> to move through the journey.</li>
+            <li><strong>Overview bar</strong> below — click any segment to jump to that event.</li>
+            <li><strong>✅ Green</strong> = positive outcome.</li>
+            <li><strong>⚠️ Red</strong> = friction (transfer/abandon/error).</li>
+            <li><strong>🕐 Grey</strong> = neutral / in-progress.</li>
+            <li><strong>Click any card</strong> to inspect full event detail.</li>
+          </ul>
+        </div>
+      </div>
+    </div>`;
+}
+
+function protoDetailHtml() {
+  const ev = protoSelected;
+  if (!ev) return `<div class="proto-detail-card"><h4>Selected Interaction</h4><p style="color:var(--text-muted);font-size:12px">Click a card to inspect.</p></div>`;
+
+  const title     = (ev.data && ev.data.uiData && ev.data.uiData.title)    || ev.type || 'Event';
+  const subtitle  = (ev.data && ev.data.uiData && ev.data.uiData.subTitle) || '';
+  const ts        = ev.time || ev.timestamp;
+  const timeLabel = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+  const sentiment = protoSentiment(ev);
+  const outcome   = protoOutcome(ev);
+  const ch        = channelClass((ev.data && ev.data.channelType) || 'custom');
+  const chanMeta  = PROTO_CHANNELS[ch] || { label: ch, icon: '⚙️' };
+  const taskId    = (ev.data && ev.data.taskId) || '—';
+  const origin    = (ev.data && ev.data.origin) || '—';
+
+  return `
+    <div class="proto-detail-card">
+      <h4>Selected Interaction</h4>
+      <div class="proto-detail-inner">
+        <div class="proto-detail-row">
+          <span style="font-size:12px;font-weight:700;color:var(--text-muted)">${escapeHtml(timeLabel)}</span>
+          <span class="proto-outcome-badge ${sentiment}">${escapeHtml(sentiment)}</span>
+        </div>
+        <div class="proto-detail-title">${escapeHtml(title)}</div>
+        ${subtitle ? `<div class="proto-detail-desc">${escapeHtml(subtitle)}</div>` : ''}
+        <dl class="proto-detail-meta">
+          <div class="proto-detail-meta-cell"><dt>Outcome</dt><dd>${escapeHtml(outcome)}</dd></div>
+          <div class="proto-detail-meta-cell"><dt>Channel</dt><dd>${chanMeta.icon} ${escapeHtml(chanMeta.label)}</dd></div>
+          <div class="proto-detail-meta-cell"><dt>Event Type</dt><dd style="font-size:11px">${escapeHtml(ev.type || '—')}</dd></div>
+          <div class="proto-detail-meta-cell"><dt>Origin</dt><dd style="font-size:11px;word-break:break-all">${escapeHtml(origin)}</dd></div>
+        </dl>
+        ${taskId !== '—' ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Task ID: <code style="font-size:10px">${escapeHtml(taskId)}</code></div>` : ''}
+        <details style="margin-top:10px">
+          <summary style="font-size:11px;cursor:pointer;color:var(--text-muted)">Show raw event ▾</summary>
+          <pre style="font-size:10px;margin-top:6px;background:var(--surface2);padding:8px;border-radius:6px;overflow-x:auto;white-space:pre-wrap">${escapeHtml(JSON.stringify(ev, null, 2))}</pre>
+        </details>
+      </div>
+    </div>`;
+}
+
+function protoSelectEvent(idx) {
+  protoSelected = protoEvents[idx] || null;
+  const selectedIdx = protoEvents.indexOf(protoSelected);
+
+  // Update card highlights in-place (preserves scroll position)
+  document.querySelectorAll('#proto-result .proto-card').forEach(el => {
+    const elIdx = parseInt(el.getAttribute('data-idx') ?? '-1');
+    el.classList.toggle('selected', elIdx === selectedIdx);
+  });
+
+  // Update minimap highlights in-place
+  document.querySelectorAll('#proto-minimap .proto-minimap-seg').forEach((el, i) => {
+    el.classList.toggle('mm-active', i === selectedIdx);
+  });
+
+  // Scroll the active minimap segment into view
+  const activeSeg = document.querySelector('#proto-minimap .mm-active');
+  if (activeSeg) activeSeg.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+
+  // Scroll the unified timeline to the column that contains this event.
+  // We derive the slot index from the event timestamp so it works whether the
+  // channel row is expanded (cards) or collapsed (pip dots).
+  const scrollWrap = document.querySelector('.proto-tl-scroll');
+  if (scrollWrap && protoSelected) {
+    const ts = protoSelected.time || protoSelected.timestamp;
+    if (ts) {
+      const d = new Date(ts);
+      const dateStr   = d.toISOString().slice(0, 10);
+      const minuteKey = dateStr + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const slotIdx   = protoSlotIndex[minuteKey];
+      if (slotIdx !== undefined) {
+        const axisCell = scrollWrap.querySelector(`.proto-axis-time[data-slot-idx="${slotIdx}"]`);
+        if (axisCell) {
+          const wrapRect = scrollWrap.getBoundingClientRect();
+          const cellRect = axisCell.getBoundingClientRect();
+          const targetLeft = scrollWrap.scrollLeft + (cellRect.left - wrapRect.left) - (wrapRect.width / 2) + (cellRect.width / 2);
+          scrollWrap.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+        }
+      }
+    }
+  }
+
+  // Re-render just the detail panel
+  const panel = document.getElementById('proto-detail-panel');
+  if (panel) panel.innerHTML = protoDetailHtml();
+}
+
+// ─── Profile Template Builder ────────────────────────────────────────────────
+
+const TPB_STARTER = {
+  templateName: 'repeat-caller-profile',
+  displayName: 'Repeat Caller Profile',
+  description: 'Highlights repeat contacts and recent customer engagement.',
+  workspaceId: '',
+  status: 'draft',
+  version: 1,
+  fields: [
+    {
+      key: 'contactLast24Hours', order: 1,
+      label: 'Contact in Last 24 Hours',
+      displayType: 'number', calculation: 'countMatchingEvents',
+      eventType: 'task:new', dataPath: '',
+      timeWindow: 'last24Hours', emptyStateText: 'No contacts in the last 24 hours',
+      source: 'wxcc',
+    },
+    {
+      key: 'lastContactChannel', order: 2,
+      label: 'Last Contact Channel',
+      displayType: 'text', calculation: 'latestValue',
+      eventType: 'task:new', dataPath: 'data.channelType',
+      timeWindow: 'last10Days', emptyStateText: 'No recent channel found',
+      source: 'wxcc',
+    },
+  ],
+};
+
+// Built-in library entries — each has its own starter fields matching the API JSON schema
+const TPB_LIBRARY = [
+  {
+    name: 'Default Service Profile',
+    displayName: 'Default Service Profile',
+    templateName: 'default-service-profile',
+    description: 'Standard service profile showing recent contacts and channel preference.',
+    fields: [
+      { key: 'totalContacts',      order: 1, label: 'Total Contacts (30 days)',  displayType: 'number',    calculation: 'countMatchingEvents', eventType: 'task:new', dataPath: '',                timeWindow: 'last30Days', emptyStateText: 'No contacts found',  source: 'wxcc' },
+      { key: 'lastContactChannel', order: 2, label: 'Last Contact Channel',      displayType: 'text',      calculation: 'latestValue',         eventType: 'task:new', dataPath: 'data.channelType', timeWindow: 'last30Days', emptyStateText: 'No channel data',    source: 'wxcc' },
+      { key: 'lastContactTime',    order: 3, label: 'Last Contact Time',         displayType: 'timestamp', calculation: 'latestValue',         eventType: 'task:new', dataPath: 'data.createdTime', timeWindow: 'last30Days', emptyStateText: 'No recent contact',  source: 'wxcc' },
+    ],
+  },
+  {
+    name: 'Repeat Caller Profile',
+    displayName: 'Repeat Caller Profile',
+    templateName: 'repeat-caller-profile',
+    description: 'Highlights repeat contacts and recent customer engagement.',
+    fields: [
+      { key: 'contactLast24Hours', order: 1, label: 'Contact in Last 24 Hours', displayType: 'number', calculation: 'countMatchingEvents', eventType: 'task:new', dataPath: '',                timeWindow: 'last24Hours', emptyStateText: 'No contacts in the last 24 hours', source: 'wxcc' },
+      { key: 'lastContactChannel', order: 2, label: 'Last Contact Channel',     displayType: 'text',   calculation: 'latestValue',         eventType: 'task:new', dataPath: 'data.channelType', timeWindow: 'last10Days',  emptyStateText: 'No recent channel found',          source: 'wxcc' },
+    ],
+  },
+  {
+    name: 'Billing Profile',
+    displayName: 'Billing Profile',
+    templateName: 'billing-profile',
+    description: 'Billing and payment events.',
+    fields: [
+      { key: 'lastPaymentDate',   order: 1, label: 'Last Payment Date',    displayType: 'timestamp', calculation: 'latestValue',         eventType: 'billing:payment', dataPath: 'data.paymentDate', timeWindow: 'last30Days', emptyStateText: 'No payment on record', source: 'billing' },
+      { key: 'totalPayments',     order: 2, label: 'Payments (30 days)',   displayType: 'number',    calculation: 'countMatchingEvents', eventType: 'billing:payment', dataPath: '',                 timeWindow: 'last30Days', emptyStateText: 'No payments found',    source: 'billing' },
+      { key: 'lastBillingAmount', order: 3, label: 'Last Billing Amount',  displayType: 'text',      calculation: 'latestValue',         eventType: 'billing:payment', dataPath: 'data.amount',      timeWindow: 'last30Days', emptyStateText: 'No amount on record',  source: 'billing' },
+    ],
+  },
+];
+
+let tpbTemplate = JSON.parse(JSON.stringify({ templateName: TPB_LIBRARY[1].templateName, displayName: TPB_LIBRARY[1].displayName, description: TPB_LIBRARY[1].description, workspaceId: '', status: 'draft', version: 1, fields: TPB_LIBRARY[1].fields }));
+let tpbSelectedFieldKey = tpbTemplate.fields[0]?.key || null;
+let tpbActiveTab = 'preview';
+let tpbActiveLibrary = 'Repeat Caller Profile';
+let tpbPreviewPerson = null;
+let tpbPreviewFieldValues = {};  // key → real value string from progressive-profile-view API
+
+// ── Read-only guard ──────────────────────────────────────────────────────────
+function tpbIsReadOnly() {
+  return tpbTemplate.templateName === 'journey-default-template';
+}
+
+// ── Initialise when page becomes visible ────────────────────────────────────
+function tpbInit() {
+  // Pre-fill workspaceId from app config if available
+  if (cfg.workspaceId && !tpbTemplate.workspaceId) {
+    tpbTemplate.workspaceId = cfg.workspaceId;
+  }
+  tpbRenderLibrary();
+  tpbRenderMeta();
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+// ── Library ──────────────────────────────────────────────────────────────────
+function tpbRenderLibrary() {
+  const list = document.getElementById('tpb-library-list');
+  if (!list) return;
+  list.innerHTML = TPB_LIBRARY.map(entry => `
+    <div class="tpb-lib-card ${entry.name === tpbActiveLibrary ? 'active' : ''}">
+      <div onclick="tpbSelectLibrary('${escapeHtml(entry.name)}')" style="flex:1;cursor:pointer;min-width:0">
+        <span class="tpb-lib-card-name">${escapeHtml(entry.displayName)}</span>
+        <span class="tpb-lib-card-sub">${escapeHtml(entry.name === tpbActiveLibrary ? 'Editing' : 'Starter')}</span>
+      </div>
+      <button class="btn btn-sm btn-secondary" style="flex-shrink:0;padding:3px 7px;font-size:11px"
+        title="Create a copy of this template"
+        onclick="event.stopPropagation();tpbSelectLibrary('${escapeHtml(entry.name)}');tpbOpenCopyModal()">📋</button>
+    </div>`).join('');
+}
+
+function tpbSelectLibrary(name) {
+  const entry = TPB_LIBRARY.find(e => e.name === name);
+  if (!entry) return;
+  tpbActiveLibrary = name;
+  // Load the entry's own starter fields (deep-clone so edits don't mutate the library)
+  tpbTemplate = {
+    templateName: entry.templateName,
+    displayName:  entry.displayName,
+    description:  entry.description,
+    workspaceId:  cfg.workspaceId || tpbTemplate.workspaceId || '',
+    status: 'draft',
+    version: 1,
+    fields: JSON.parse(JSON.stringify(entry.fields)),
+  };
+  tpbSelectedFieldKey = tpbTemplate.fields[0]?.key || null;
+  tpbRenderLibrary();
+  tpbRenderMeta();
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+function tpbNewTemplate() {
+  tpbActiveLibrary = '';
+  tpbTemplate = {
+    templateName: 'new-profile',
+    displayName: 'New Profile',
+    description: '',
+    workspaceId: cfg.workspaceId || '',
+    status: 'draft',
+    version: 1,
+    fields: [],
+  };
+  tpbSelectedFieldKey = null;
+  tpbRenderLibrary();
+  tpbRenderMeta();
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+// ── Meta inputs ──────────────────────────────────────────────────────────────
+function tpbRenderMeta() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('tpb-displayName',  tpbTemplate.displayName);
+  set('tpb-templateName', tpbTemplate.templateName);
+  set('tpb-workspaceId',  tpbTemplate.workspaceId);
+  set('tpb-description',  tpbTemplate.description || '');
+
+  const ro = tpbIsReadOnly();
+  const banner = document.getElementById('tpb-readonly-banner');
+  if (banner) banner.style.display = ro ? '' : 'none';
+
+  ['tpb-displayName','tpb-templateName','tpb-workspaceId','tpb-description'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.readOnly = ro;
+  });
+}
+
+function tpbUpdateMeta() {
+  const get = id => (document.getElementById(id) || {}).value || '';
+  tpbTemplate.displayName  = get('tpb-displayName');
+  tpbTemplate.templateName = get('tpb-templateName');
+  tpbTemplate.workspaceId  = get('tpb-workspaceId');
+  tpbTemplate.description  = get('tpb-description');
+  tpbRenderPreview();
+}
+
+// ── Field list ───────────────────────────────────────────────────────────────
+function tpbRenderFieldList() {
+  const list = document.getElementById('tpb-field-list');
+  if (!list) return;
+
+  const ro = tpbIsReadOnly();
+  // Show/hide the Add Field button
+  const addBtn = document.querySelector('.tpb-card-header .btn-secondary');
+  if (addBtn) addBtn.style.display = ro ? 'none' : '';
+
+  if (!tpbTemplate.fields.length) {
+    list.innerHTML = `<p style="font-size:12px;color:var(--text-muted);padding:8px 0">No fields yet. Click + Add Field to start.</p>`;
+    return;
+  }
+  list.innerHTML = tpbTemplate.fields
+    .slice().sort((a, b) => a.order - b.order)
+    .map(f => `
+      <div class="tpb-field-item ${f.key === tpbSelectedFieldKey ? 'active' : ''}" onclick="tpbSelectField('${escapeHtml(f.key)}')">
+        <span class="tpb-drag-handle">⠿</span>
+        <span class="tpb-field-order-badge">${f.order}</span>
+        <div class="tpb-field-item-body">
+          <div class="tpb-field-item-label">${escapeHtml(f.label)}</div>
+          <div class="tpb-field-item-meta">${escapeHtml(f.calculation)} · ${escapeHtml(f.displayType)} · ${escapeHtml(f.timeWindow)}</div>
+        </div>
+      </div>`).join('');
+}
+
+function tpbSelectField(key) {
+  tpbSelectedFieldKey = key;
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+}
+
+function tpbAddField() {
+  const key = 'field_' + Date.now();
+  const defEventType = 'task:new';
+  const reg = EVENT_SCHEMA_REGISTRY[defEventType];
+  const field = {
+    key, order: tpbTemplate.fields.length + 1,
+    label: 'New Profile Field',
+    displayType: 'text', calculation: 'latestValue',
+    eventType: defEventType, dataPath: 'data.',
+    timeWindow: 'last10Days', emptyStateText: 'No value found',
+    source: reg?.defaultSource || 'custom',
+    description: '',
+    filters: [],
+    customTimeWindow: { amount: 1, unit: 'days' },
+    displayOptions: {},
+    visibilityRule: null,
+    _keyLocked: false,
+  };
+  tpbTemplate.fields.push(field);
+  tpbSelectedFieldKey = key;
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+function tpbDeleteField() {
+  tpbTemplate.fields = tpbTemplate.fields.filter(f => f.key !== tpbSelectedFieldKey);
+  // Re-number orders
+  tpbTemplate.fields.forEach((f, i) => { f.order = i + 1; });
+  tpbSelectedFieldKey = tpbTemplate.fields[0]?.key || null;
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+// ── Schema registry ──────────────────────────────────────────────────────────
+const EVENT_SCHEMA_REGISTRY = {
+  'task:new':    { defaultSource:'wxcc',        sources:['wxcc'],
+    dataPaths:[
+      { path:'data.taskId',      label:'Task ID',        type:'text' },
+      { path:'data.origin',      label:'Origin',         type:'text' },
+      { path:'data.channelType', label:'Channel Type',   type:'enum', values:['email','chat','telephony','social'] },
+      { path:'identity',         label:'Identity',       type:'text' },
+      { path:'identitytype',     label:'Identity Type',  type:'enum', values:['phone','email','socialId','customerId','temporaryId'] },
+      { path:'source',           label:'Source',         type:'text' },
+      { path:'type',             label:'Event Type',     type:'text' },
+      { path:'id',               label:'Event ID',       type:'text' },
+    ]},
+  'payment:event': { defaultSource:'billing', sources:['billing','custom'],
+    dataPaths:[
+      { path:'data.amount',      label:'Payment Amount', type:'number' },
+      { path:'data.status',      label:'Payment Status', type:'enum', values:['approved','declined','pending','failed'] },
+      { path:'data.paymentDate', label:'Payment Date',   type:'timestamp' },
+    ]},
+  'claim:created': { defaultSource:'claims', sources:['claims','custom'],
+    dataPaths:[
+      { path:'data.claimId',     label:'Claim ID',     type:'text' },
+      { path:'data.claimType',   label:'Claim Type',   type:'enum', values:['auto','home','property','injury','other'] },
+      { path:'data.claimStatus', label:'Claim Status', type:'enum', values:['open','pending','closed','denied'] },
+    ]},
+  'web:visit':    { defaultSource:'web',        sources:['web','custom'],
+    dataPaths:[
+      { path:'data.url',       label:'Page URL',   type:'url' },
+      { path:'data.pageTitle', label:'Page Title', type:'text' },
+      { path:'data.referrer',  label:'Referrer',   type:'url' },
+    ]},
+  'case:created':     { defaultSource:'crm',        sources:['crm','custom'],                                                    dataPaths:[] },
+  'case:updated':     { defaultSource:'crm',        sources:['crm','custom'],                                                    dataPaths:[] },
+  'quote:created':    { defaultSource:'salesforce', sources:['salesforce','custom'],                                             dataPaths:[] },
+  'claim:updated':    { defaultSource:'claims',     sources:['claims','custom'],                                                 dataPaths:[] },
+  'mobile:app-event': { defaultSource:'mobile',     sources:['mobile','custom'],                                                 dataPaths:[] },
+  'custom:event':     { defaultSource:'custom',     sources:['wxcc','web','mobile','crm','billing','claims','salesforce','servicenow','custom'], dataPaths:[] },
+};
+const ALL_SOURCES     = ['wxcc','web','mobile','crm','billing','claims','salesforce','servicenow','custom'];
+const ALL_EVENT_TYPES = Object.keys(EVENT_SCHEMA_REGISTRY);
+const CALC_TYPES      = ['countMatchingEvents','latestValue','firstValue','sum','average','min','max','exists','distinctCount'];
+const TIME_WINDOWS    = [
+  { v:'last15Minutes', l:'Last 15 Minutes' }, { v:'last1Hour',  l:'Last 1 Hour'  },
+  { v:'last4Hours',    l:'Last 4 Hours'    }, { v:'last24Hours', l:'Last 24 Hours' },
+  { v:'last48Hours',   l:'Last 48 Hours'  }, { v:'last7Days',  l:'Last 7 Days'  },
+  { v:'last10Days',    l:'Last 10 Days'   }, { v:'last30Days', l:'Last 30 Days' },
+  { v:'custom',        l:'Custom…'        },
+];
+const DISPLAY_TYPES   = ['text','number','badge','boolean','timestamp','currency','percentage','link'];
+const BADGE_COLORS    = ['gray','blue','green','yellow','orange','red','purple'];
+const ALL_OPERATORS   = ['equals','notEquals','contains','notContains','startsWith','endsWith',
+                         'greaterThan','greaterThanOrEqual','lessThan','lessThanOrEqual',
+                         'exists','doesNotExist','in','notIn'];
+
+function tpbGetDataPaths(et)       { return (EVENT_SCHEMA_REGISTRY[et]?.dataPaths) ?? []; }
+function tpbGetDataPathDef(et, dp) { return tpbGetDataPaths(et).find(p => p.path === dp); }
+function tpbCalcNeedsPath(calc)    { return ['latestValue','firstValue','sum','average','min','max','distinctCount'].includes(calc); }
+function tpbCalcNeedsNumeric(calc) { return ['sum','average','min','max'].includes(calc); }
+function tpbValidDisplayTypes(calc) {
+  switch(calc) {
+    case 'countMatchingEvents': return ['number','badge','boolean'];
+    case 'latestValue': case 'firstValue': return ['text','timestamp','number','currency','percentage','link'];
+    case 'sum': case 'average': case 'min': case 'max': return ['number','currency','percentage'];
+    case 'exists': return ['boolean','badge'];
+    case 'distinctCount': return ['number','badge'];
+    default: return DISPLAY_TYPES;
+  }
+}
+function tpbValidOps(type) {
+  const text = ['equals','notEquals','contains','notContains','startsWith','endsWith','in','notIn'];
+  const num  = ['equals','notEquals','greaterThan','greaterThanOrEqual','lessThan','lessThanOrEqual','in','notIn'];
+  const ts   = ['equals','notEquals','greaterThan','greaterThanOrEqual','lessThan','lessThanOrEqual','exists','doesNotExist'];
+  switch(type) {
+    case 'text': case 'url': return text;
+    case 'number': case 'currency': return num;
+    case 'timestamp': return ts;
+    case 'boolean': return ['equals','exists','doesNotExist'];
+    case 'enum': return ['equals','notEquals','in','notIn'];
+    default: return ['equals','notEquals','exists','doesNotExist'];
+  }
+}
+
+// ── Field editor helpers ──────────────────────────────────────────────────────
+function tpbFEField() { return tpbTemplate.fields.find(f => f.key === tpbSelectedFieldKey); }
+
+function tpbFEValidate(field) {
+  const errors = [];
+  const allKeys = tpbTemplate.fields.filter(f => f !== field).map(f => f.key);
+  if (!field.key || !field.key.trim()) errors.push('Key is required');
+  else if (!/^[a-zA-Z0-9_-]+$/.test(field.key)) errors.push('Key must contain only letters, numbers, _ or -');
+  else if (allKeys.includes(field.key)) errors.push('Key must be unique');
+  if (!field.label || field.label.length < 2) errors.push('Label must be at least 2 characters');
+  if (field.label && field.label.length > 60) errors.push('Label must be 60 characters or fewer');
+  if (!field.eventType) errors.push('Event Type is required');
+  if (!field.source) errors.push('Source is required');
+  if (tpbCalcNeedsPath(field.calculation) && !field.dataPath) errors.push('Data Path is required for this calculation');
+  if (tpbCalcNeedsNumeric(field.calculation)) {
+    const def = tpbGetDataPathDef(field.eventType, field.dataPath);
+    if (def && def.type !== 'number' && def.type !== 'currency') errors.push('Numeric calculation requires a numeric data path');
+  }
+  if (!field.timeWindow) errors.push('Time Window is required');
+  if (field.timeWindow === 'custom') {
+    if (!field.customTimeWindow?.amount || field.customTimeWindow.amount < 1) errors.push('Custom duration must be at least 1');
+    const maxMins = { minutes:129600, hours:2160, days:90 };
+    const unit = field.customTimeWindow?.unit || 'days';
+    if (field.customTimeWindow?.amount > maxMins[unit]) errors.push(`Max custom duration is 90 days`);
+  }
+  if (!field.emptyStateText) errors.push('Empty State Text is required');
+  return errors;
+}
+
+function tpbFESelOpts(values, current, labelFn) {
+  return values.map(v => `<option value="${escapeHtml(v)}"${v===current?' selected':''}>${escapeHtml(labelFn ? labelFn(v) : v)}</option>`).join('');
+}
+
+function tpbFEInput(id, val, placeholder, extra) {
+  return `<input class="tpb-input" id="${id}" value="${escapeHtml(val||'')}" placeholder="${escapeHtml(placeholder||'')}" ${extra||''} style="width:100%">`;
+}
+function tpbFESel(id, opts, extra) {
+  return `<select class="tpb-input" id="${id}" ${extra||''} style="width:100%">${opts}</select>`;
+}
+
+// ── Field editor renderer ─────────────────────────────────────────────────────
+function tpbRenderFieldEditor() {
+  const editor = document.getElementById('tpb-field-editor');
+  if (!editor) return;
+  const field = tpbFEField();
+  if (!field) { editor.style.display = 'none'; return; }
+  editor.style.display = '';
+
+  const ro     = tpbIsReadOnly();
+  const dis    = ro ? 'disabled' : '';
+  const errors = tpbFEValidate(field);
+  const badgeCls = errors.length ? 'tpb-fe-badge-err' : 'tpb-fe-badge-ok';
+  const badgeTxt = errors.length ? `⚠️ ${errors.length} error${errors.length>1?'s':''}` : '✅ Valid';
+
+  // Data path info
+  const dataPaths  = tpbGetDataPaths(field.eventType);
+  const dpDef      = tpbGetDataPathDef(field.eventType, field.dataPath);
+  const needsPath  = tpbCalcNeedsPath(field.calculation);
+  const validDTs   = tpbValidDisplayTypes(field.calculation);
+  const actualDT   = validDTs.includes(field.displayType) ? field.displayType : validDTs[0];
+  const sources    = EVENT_SCHEMA_REGISTRY[field.eventType]?.sources || ALL_SOURCES;
+
+  // ── Section: Field Identity
+  const secIdentity = `
+    <details class="tpb-fe-section" open>
+      <summary>Field Identity</summary>
+      <div class="tpb-fe-grid">
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Key <span style="font-style:italic;font-weight:400">(API identifier)</span></label>
+          ${tpbFEInput('fe-key', field.key, 'my-field-key', `oninput="tpbFEChangeText('key',this.value)" onblur="tpbFEChange('key',this.value)" ${dis}`)}
+          ${!/^[a-zA-Z0-9_-]+$/.test(field.key||'x') ? '<span class="tpb-fe-err">Must contain only letters, numbers, _ or -</span>' : ''}
+        </div>
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Label</label>
+          ${tpbFEInput('fe-label', field.label, 'e.g. Last Contact Channel', `oninput="tpbFEChangeText('label',this.value)" onblur="tpbFEChange('label',this.value)" ${dis}`)}
+          ${field.label && field.label.length > 60 ? '<span class="tpb-fe-err">Max 60 characters</span>' : ''}
+        </div>
+        <div class="tpb-fe-group tpb-fe-span2">
+          <label class="tpb-fe-label">Description <span style="font-weight:400">(optional)</span></label>
+          <textarea class="tpb-input" id="fe-description" rows="2" placeholder="What this field measures…" oninput="tpbFEChangeText('description',this.value)" onblur="tpbFEChange('description',this.value)" ${dis} style="resize:vertical;min-height:48px;font-family:inherit;font-size:12px">${escapeHtml(field.description||'')}</textarea>
+        </div>
+      </div>
+    </details>`;
+
+  // ── Section: Data Source
+  const dpDatalistId = 'fe-dataPath-list';
+  const dpDatalistOpts = dataPaths.map(d => `<option value="${escapeHtml(d.path)}" label="${escapeHtml(d.label)}">`).join('');
+  const dpDatalist = `<datalist id="${dpDatalistId}">${dpDatalistOpts}</datalist>`;
+  const enumHint = dpDef?.type === 'enum' ? `<div class="tpb-enum-hint">Known values: ${dpDef.values.map(v=>`<span class="tpb-enum-val">${escapeHtml(v)}</span>`).join('')}</div>` : '';
+  const dpDisabled = (!field.eventType || !needsPath) ? 'disabled' : dis;
+
+  const secSource = `
+    <details class="tpb-fe-section" open>
+      <summary>Data Source</summary>
+      <div class="tpb-fe-grid">
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Event Type</label>
+          ${tpbFESel('fe-eventType',
+            `<option value="">— select —</option>` + tpbFESelOpts(ALL_EVENT_TYPES, field.eventType),
+            `onchange="tpbFEChange('eventType',this.value)" ${dis}`)}
+          ${!field.eventType ? '<span class="tpb-fe-err">Required</span>' : ''}
+        </div>
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Source</label>
+          ${tpbFESel('fe-source', tpbFESelOpts(sources, field.source), `onchange="tpbFEChange('source',this.value)" ${dis}`)}
+          ${!field.source ? '<span class="tpb-fe-err">Required</span>' : ''}
+        </div>
+        ${needsPath ? `
+        <div class="tpb-fe-group tpb-fe-span2">
+          <label class="tpb-fe-label">Data Path <span style="color:var(--danger)">*</span></label>
+          ${dpDatalist}
+          <input class="tpb-input" id="fe-dataPath" type="text"
+            value="${escapeHtml(field.dataPath||'')}"
+            placeholder="${dataPaths.length ? 'Select or type a path, e.g. data.channelType' : 'e.g. data.myField'}"
+            list="${dpDatalistId}"
+            oninput="tpbFEChangeText('dataPath',this.value)"
+            onblur="tpbFEChange('dataPath',this.value)"
+            ${dpDisabled}
+            style="width:100%" />
+          ${enumHint}
+          ${dataPaths.length ? `<span class="tpb-fe-hint">${dataPaths.length} known path${dataPaths.length>1?'s':''} available — or type a custom path</span>` : '<span class="tpb-fe-hint">No known paths for this event type — type a custom path</span>'}
+          ${needsPath && !field.dataPath ? '<span class="tpb-fe-err">Required for this calculation</span>' : ''}
+        </div>` : ''}
+      </div>
+    </details>`;
+
+  // ── Section: Calculation
+  const twOpts = TIME_WINDOWS.map(tw => `<option value="${tw.v}"${tw.v===field.timeWindow?' selected':''}>${tw.l}</option>`).join('');
+  const customTW = field.customTimeWindow || { amount:1, unit:'days' };
+  const customBlock = field.timeWindow === 'custom' ? `
+    <div class="tpb-fe-grid triple" style="margin-top:8px">
+      <div class="tpb-fe-group">
+        <label class="tpb-fe-label">Amount</label>
+        <input class="tpb-input" type="number" min="1" value="${customTW.amount}" id="fe-ctwAmount" oninput="tpbFEChangeCTW('amount',this.value)" ${dis} style="width:100%">
+      </div>
+      <div class="tpb-fe-group">
+        <label class="tpb-fe-label">Unit</label>
+        ${tpbFESel('fe-ctwUnit', tpbFESelOpts(['minutes','hours','days'], customTW.unit), `onchange="tpbFEChangeCTW('unit',this.value)" ${dis}`)}
+      </div>
+      <div class="tpb-fe-group" style="justify-content:flex-end;padding-bottom:1px">
+        <label class="tpb-fe-label" style="opacity:0">_</label>
+        <span class="tpb-fe-hint">Max: 90 days</span>
+      </div>
+    </div>` : '';
+
+  const secCalc = `
+    <details class="tpb-fe-section" open>
+      <summary>Calculation</summary>
+      <div class="tpb-fe-grid">
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Calculation Type</label>
+          ${tpbFESel('fe-calculation', tpbFESelOpts(CALC_TYPES, field.calculation, c => c.replace(/([A-Z])/g,' $1').trim()), `onchange="tpbFEChange('calculation',this.value)" ${dis}`)}
+        </div>
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Time Window</label>
+          ${tpbFESel('fe-timeWindow', twOpts, `onchange="tpbFEChange('timeWindow',this.value)" ${dis}`)}
+        </div>
+      </div>
+      ${customBlock}
+    </details>`;
+
+  // ── Section: Filters (collapsed)
+  const filterRows = (field.filters||[]).map((flt, i) => {
+    const fltDef   = tpbGetDataPathDef(field.eventType, flt.fieldPath);
+    const fltType  = fltDef?.type || 'text';
+    const fltOps   = tpbValidOps(fltType);
+    const fpOpts   = dataPaths.map(d => `<option value="${escapeHtml(d.path)}"${d.path===flt.fieldPath?' selected':''}>${escapeHtml(d.label)}</option>`).join('');
+    const opOpts   = tpbFESelOpts(fltOps, flt.operator);
+    const valInput = fltDef?.type === 'enum'
+      ? `<select class="tpb-input" onchange="tpbFEUpdateFilter('${flt.id}','value',this.value)" ${dis} style="width:100%">${tpbFESelOpts(fltDef.values, flt.value)}</select>`
+      : `<input class="tpb-input" value="${escapeHtml(String(flt.value??''))}" placeholder="value" oninput="tpbFEUpdateFilter('${flt.id}','value',this.value)" ${dis} style="width:100%">`;
+    return `<div class="tpb-filter-row">
+      <select class="tpb-input" onchange="tpbFEUpdateFilter('${flt.id}','fieldPath',this.value)" ${dis} style="width:100%">
+        <option value="">— field —</option>${fpOpts}
+      </select>
+      <select class="tpb-input" onchange="tpbFEUpdateFilter('${flt.id}','operator',this.value)" ${dis} style="width:100%">${opOpts}</select>
+      ${valInput}
+      ${ro ? '' : `<button onclick="tpbFERemoveFilter('${flt.id}')" title="Remove filter">×</button>`}
+    </div>`;
+  }).join('');
+
+  const secFilters = `
+    <details class="tpb-fe-section">
+      <summary>Filters <span style="font-weight:400;text-transform:none;letter-spacing:0">(${(field.filters||[]).length})</span></summary>
+      <div id="fe-filter-list">
+        ${(field.filters||[]).length === 0 ? '<p style="font-size:11px;color:var(--text-muted);margin-bottom:8px">No filters. Events will not be filtered.</p>' : filterRows}
+      </div>
+      ${ro ? '' : `<button class="btn btn-sm btn-secondary" onclick="tpbFEAddFilter()">+ Add Filter</button>`}
+    </details>`;
+
+  // ── Section: Display
+  const validDTsList = tpbValidDisplayTypes(field.calculation);
+  const dtOpts = validDTsList.map(dt => `<option value="${dt}"${dt===actualDT?' selected':''}>${dt.charAt(0).toUpperCase()+dt.slice(1)}</option>`).join('');
+  let conditionalDisplay = '';
+  if (actualDT === 'badge') {
+    const bc = field.displayOptions?.badge || {};
+    conditionalDisplay = `
+      <div class="tpb-cond-section tpb-fe-span2">
+        <div class="tpb-cond-title">Badge Options</div>
+        <div class="tpb-fe-grid">
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Badge Label</label>
+            ${tpbFEInput('fe-badgeLabel', bc.label, 'e.g. Repeat Caller', `oninput="tpbFEChangeDisplayOpt('badge.label',this.value)" ${dis}`)}
+          </div>
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Badge Color</label>
+            ${tpbFESel('fe-badgeColor', tpbFESelOpts(BADGE_COLORS, bc.color||'blue'), `onchange="tpbFEChangeDisplayOpt('badge.color',this.value)" ${dis}`)}
+          </div>
+        </div>
+      </div>`;
+  } else if (actualDT === 'timestamp') {
+    const tf = field.displayOptions?.timestampFormat || 'shortDateTime';
+    conditionalDisplay = `
+      <div class="tpb-cond-section">
+        <div class="tpb-cond-title">Timestamp Format</div>
+        ${tpbFESel('fe-tsFormat', tpbFESelOpts(['shortDate','shortDateTime','longDateTime','relative'], tf,
+          v => ({shortDate:'Short Date',shortDateTime:'Short Date + Time',longDateTime:'Long Date + Time',relative:'Relative (e.g. 2 hours ago)'}[v]||v)),
+          `onchange="tpbFEChangeDisplayOpt('timestampFormat',this.value)" ${dis}`)}
+      </div>`;
+  } else if (actualDT === 'currency') {
+    const cc = field.displayOptions || {};
+    conditionalDisplay = `
+      <div class="tpb-cond-section tpb-fe-span2">
+        <div class="tpb-cond-title">Currency Options</div>
+        <div class="tpb-fe-grid">
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Currency Code</label>
+            ${tpbFEInput('fe-currencyCode', cc.currencyCode||'USD', 'USD', `oninput="tpbFEChangeDisplayOpt('currencyCode',this.value)" ${dis}`)}
+          </div>
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Decimal Places</label>
+            <input class="tpb-input" type="number" min="0" max="6" value="${cc.decimalPlaces??2}" id="fe-currDec" oninput="tpbFEChangeDisplayOpt('decimalPlaces',parseInt(this.value))" ${dis} style="width:100%">
+          </div>
+        </div>
+      </div>`;
+  } else if (actualDT === 'percentage') {
+    const cc = field.displayOptions || {};
+    conditionalDisplay = `
+      <div class="tpb-cond-section">
+        <div class="tpb-cond-title">Percentage Options</div>
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Decimal Places</label>
+          <input class="tpb-input" type="number" min="0" max="4" value="${cc.decimalPlaces??1}" id="fe-pctDec" oninput="tpbFEChangeDisplayOpt('decimalPlaces',parseInt(this.value))" ${dis} style="width:100%">
+        </div>
+      </div>`;
+  } else if (actualDT === 'link') {
+    const lk = field.displayOptions || {};
+    conditionalDisplay = `
+      <div class="tpb-cond-section tpb-fe-span2">
+        <div class="tpb-cond-title">Link Options</div>
+        <div class="tpb-fe-grid">
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Link Text (static)</label>
+            ${tpbFEInput('fe-linkText', lk.linkText, 'View Details', `oninput="tpbFEChangeDisplayOpt('linkText',this.value)" ${dis}`)}
+          </div>
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">URL Data Path</label>
+            ${tpbFEInput('fe-linkUrl', lk.linkUrlPath, 'data.url', `oninput="tpbFEChangeDisplayOpt('linkUrlPath',this.value)" ${dis}`)}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const secDisplay = `
+    <details class="tpb-fe-section" open>
+      <summary>Display</summary>
+      <div class="tpb-fe-grid">
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Display Type</label>
+          ${tpbFESel('fe-displayType', dtOpts, `onchange="tpbFEChange('displayType',this.value)" ${dis}`)}
+          ${!validDTsList.includes(field.displayType) ? `<span class="tpb-fe-hint">Reset to ${validDTsList[0]} — incompatible with ${field.calculation}</span>` : ''}
+        </div>
+        ${conditionalDisplay}
+      </div>
+    </details>`;
+
+  // ── Section: Visibility Rule (collapsed)
+  const vr = field.visibilityRule;
+  const vrPaths = dataPaths.map(d => `<option value="${escapeHtml(d.path)}"${d.path===(vr?.fieldPath||'')?' selected':''}>${escapeHtml(d.label)}</option>`).join('');
+  const vrDef  = vr ? tpbGetDataPathDef(field.eventType, vr.fieldPath) : null;
+  const vrOps  = tpbValidOps(vrDef?.type || 'text');
+  const secVisibility = `
+    <details class="tpb-fe-section">
+      <summary>Visibility Rule <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></summary>
+      ${vr ? `
+      <div class="tpb-cond-section">
+        <div class="tpb-cond-title">Show this field only when:</div>
+        <div class="tpb-fe-grid triple">
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Field</label>
+            <select class="tpb-input" onchange="tpbFEChangeVR('fieldPath',this.value)" ${dis} style="width:100%">
+              <option value="">— select —</option>${vrPaths}
+            </select>
+          </div>
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Operator</label>
+            ${tpbFESel('fe-vrOp', tpbFESelOpts(vrOps, vr.operator), `onchange="tpbFEChangeVR('operator',this.value)" ${dis}`)}
+          </div>
+          <div class="tpb-fe-group">
+            <label class="tpb-fe-label">Value</label>
+            ${tpbFEInput('fe-vrVal', vr.value, 'value', `oninput="tpbFEChangeVR('value',this.value)" ${dis}`)}
+          </div>
+        </div>
+      </div>
+      ${ro ? '' : `<button class="btn btn-sm btn-secondary" style="margin-top:8px" onclick="tpbFEClearVR()">× Remove Rule</button>`}
+      ` : `
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px">No visibility rule. Field always shown.</p>
+      ${ro ? '' : (dataPaths.length ? `<button class="btn btn-sm btn-secondary" onclick="tpbFEAddVR()">+ Add Visibility Rule</button>` : `<span class="tpb-fe-hint">Select an Event Type with data paths to add visibility rules.</span>`)}`}
+    </details>`;
+
+  // ── Section: Empty State
+  const emptySuggestions = ['No value found','No data available','No recent activity','No contacts found',
+    'No contacts in the last 24 hours','No channel data','No recent contact','No billing activity found','—','N/A'];
+  const emptyOpts = emptySuggestions.map(s => `<option value="${escapeHtml(s)}">`).join('');
+  const secEmpty = `
+    <details class="tpb-fe-section" open>
+      <summary>Empty State</summary>
+      <div class="tpb-fe-grid single">
+        <div class="tpb-fe-group">
+          <label class="tpb-fe-label">Empty State Text <span style="color:var(--danger)">*</span></label>
+          <input class="tpb-input" list="fe-empty-dl" value="${escapeHtml(field.emptyStateText||'')}" placeholder="No value found" oninput="tpbFEChange('emptyStateText',this.value)" ${dis} style="width:100%">
+          <datalist id="fe-empty-dl">${emptyOpts}</datalist>
+          ${!field.emptyStateText ? '<span class="tpb-fe-err">Required</span>' : ''}
+        </div>
+      </div>
+    </details>`;
+
+  // ── Footer
+  const footer = `
+    <div class="tpb-fe-footer">
+      ${ro ? '' : `
+        <button class="btn btn-sm btn-danger" onclick="tpbDeleteField()">🗑 Remove</button>
+        <button class="btn btn-sm btn-secondary" onclick="tpbFEDuplicate()">📋 Duplicate</button>
+      `}
+    </div>`;
+
+  editor.innerHTML = `
+    <div class="tpb-fe-header">
+      <div>
+        <div class="tpb-fe-title">${escapeHtml(field.label || 'Untitled Field')}</div>
+        <div class="tpb-fe-key">${escapeHtml(field.key || '(no key)')}</div>
+      </div>
+      <span class="tpb-fe-badge ${badgeCls}">${badgeTxt}</span>
+    </div>
+    ${secIdentity}
+    ${secSource}
+    ${secCalc}
+    ${secFilters}
+    ${secDisplay}
+    ${secVisibility}
+    ${secEmpty}
+    ${footer}
+  `;
+
+  // Preserve open/closed state of sections across re-renders
+  // (details elements start in the state set by the `open` attribute above)
+}
+
+// ── Field change handlers ─────────────────────────────────────────────────────
+// Updates a text field value without re-rendering (preserves focus during typing).
+// Full re-render + cascade happens on blur via tpbFEChange().
+function tpbFEChangeText(prop, value) {
+  const field = tpbFEField();
+  if (!field) return;
+  field[prop] = value;
+  // Keep the field list and preview in sync without destroying the editor
+  tpbRenderFieldList();
+  tpbRenderPreview();
+}
+
+function tpbFEChange(prop, value) {
+  const field = tpbFEField();
+  if (!field) return;
+
+  if (prop === 'key') {
+    field.key = value;
+    field._keyLocked = true;
+    tpbSelectedFieldKey = value;
+  } else if (prop === 'label') {
+    field.label = value;
+    if (!field._keyLocked) {
+      field.key = value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+      tpbSelectedFieldKey = field.key;
+    }
+  } else if (prop === 'eventType') {
+    field.eventType = value;
+    // Default source from registry
+    const reg = EVENT_SCHEMA_REGISTRY[value];
+    field.source = reg?.defaultSource || field.source || 'custom';
+    // Reset dataPath only if the current value was a known registry path for the OLD event type
+    // (preserve custom/free-form paths the user typed)
+    const validPaths = tpbGetDataPaths(value).map(p => p.path);
+    const oldPaths   = tpbGetDataPaths(field.eventType).map(p => p.path);
+    if (field.dataPath && oldPaths.includes(field.dataPath) && !validPaths.includes(field.dataPath)) field.dataPath = '';
+    // Reset filters whose fieldPath is no longer valid
+    field.filters = (field.filters||[]).filter(f => !f.fieldPath || validPaths.includes(f.fieldPath));
+    if (field.visibilityRule?.fieldPath && !validPaths.includes(field.visibilityRule.fieldPath)) field.visibilityRule = null;
+  } else if (prop === 'calculation') {
+    field.calculation = value;
+    // Reset displayType if no longer valid
+    const validDTs = tpbValidDisplayTypes(value);
+    if (!validDTs.includes(field.displayType)) field.displayType = validDTs[0];
+    // Clear dataPath if not needed
+    if (!tpbCalcNeedsPath(value)) field.dataPath = '';
+  } else if (prop === 'displayType') {
+    field.displayType = value;
+    field.displayOptions = {};
+  } else {
+    field[prop] = value;
+  }
+
+  tpbRenderFieldEditor();
+  tpbRenderFieldList();
+  tpbRenderPreview();
+}
+
+function tpbFEChangeCTW(prop, value) {
+  const field = tpbFEField();
+  if (!field) return;
+  field.customTimeWindow = field.customTimeWindow || { amount:1, unit:'days' };
+  field.customTimeWindow[prop] = prop === 'amount' ? Number(value) : value;
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+function tpbFEChangeDisplayOpt(path, value) {
+  const field = tpbFEField();
+  if (!field) return;
+  field.displayOptions = field.displayOptions || {};
+  if (path.startsWith('badge.')) {
+    field.displayOptions.badge = field.displayOptions.badge || {};
+    field.displayOptions.badge[path.slice(6)] = value;
+  } else {
+    field.displayOptions[path] = value;
+  }
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+function tpbFEAddFilter() {
+  const field = tpbFEField();
+  if (!field) return;
+  field.filters = field.filters || [];
+  field.filters.push({ id:'f_'+Date.now(), fieldPath:'', operator:'equals', value:'' });
+  tpbRenderFieldEditor();
+}
+function tpbFERemoveFilter(filterId) {
+  const field = tpbFEField();
+  if (!field) return;
+  field.filters = (field.filters||[]).filter(f => f.id !== filterId);
+  tpbRenderFieldEditor();
+}
+function tpbFEUpdateFilter(filterId, prop, value) {
+  const field = tpbFEField();
+  if (!field) return;
+  const flt = (field.filters||[]).find(f => f.id === filterId);
+  if (flt) { flt[prop] = value; if (prop === 'fieldPath') flt.operator = 'equals'; }
+  tpbRenderFieldEditor();
+}
+
+function tpbFEAddVR() {
+  const field = tpbFEField();
+  if (!field) return;
+  field.visibilityRule = { fieldPath:'', operator:'equals', value:'' };
+  tpbRenderFieldEditor();
+}
+function tpbFEClearVR() {
+  const field = tpbFEField();
+  if (!field) return;
+  field.visibilityRule = null;
+  tpbRenderFieldEditor();
+}
+function tpbFEChangeVR(prop, value) {
+  const field = tpbFEField();
+  if (!field || !field.visibilityRule) return;
+  field.visibilityRule[prop] = value;
+  tpbRenderFieldEditor();
+}
+
+function tpbFEDuplicate() {
+  const field = tpbFEField();
+  if (!field) return;
+  const copy = JSON.parse(JSON.stringify(field));
+  let newKey = field.key + '_copy';
+  let n = 2;
+  while (tpbTemplate.fields.some(f => f.key === newKey)) { newKey = field.key + '_copy' + n++; }
+  copy.key = newKey;
+  copy.label = field.label + ' (copy)';
+  copy.order = tpbTemplate.fields.length + 1;
+  copy._keyLocked = true;
+  tpbTemplate.fields.push(copy);
+  tpbSelectedFieldKey = newKey;
+  tpbRenderLibrary();
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+// Legacy shim — kept for any remaining callers
+function tpbUpdateField(prop, value) { tpbFEChange(prop, value); }
+
+// ── Preview / JSON / Validation ──────────────────────────────────────────────
+function tpbSetTab(tab) {
+  tpbActiveTab = tab;
+  ['preview','json','validation'].forEach(t => {
+    const btn  = document.getElementById('tpb-tab-' + t);
+    const pane = document.getElementById('tpb-pane-' + t);
+    if (btn)  btn.classList.toggle('active', t === tab);
+    if (pane) pane.style.display = t === tab ? '' : 'none';
+  });
+  tpbRenderPreview();
+}
+
+// ── Preview person lookup ────────────────────────────────────────────────────
+async function tpbPreviewLookup() {
+  const input = document.getElementById('tpb-preview-identity');
+  if (!input) return;
+  const identity = input.value.trim();
+  if (!identity) return;
+  closeAllIdentityDropdowns();
+
+  const personEl = document.getElementById('tpb-preview-person');
+  const rowsEl   = document.getElementById('tpb-preview-rows');
+  if (personEl) personEl.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Searching…</span>';
+  if (rowsEl)   rowsEl.innerHTML   = '';
+
+  // Step 1: Resolve identity → person
+  let person;
+  try {
+    const encoded  = encodeURIComponent(identity);
+    const response = await api('GET', `/admin/v1/api/person/workspace-id/${cfg.workspaceId}/aliases/${encoded}`);
+    person = Array.isArray(response.data) ? response.data[0] : (response.data || response);
+    if (!person || !person.id) {
+      tpbPreviewPerson     = null;
+      tpbPreviewFieldValues = {};
+      if (personEl) personEl.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">No person found.</span>';
+      return;
+    }
+    saveRecentIdentity(identity);
+    tpbPreviewPerson = person;
+  } catch (e) {
+    tpbPreviewPerson     = null;
+    tpbPreviewFieldValues = {};
+    if (personEl) personEl.innerHTML = `<span style="font-size:11px;color:var(--error)">${escapeHtml(e.status === 404 ? 'No person found.' : e.message)}</span>`;
+    return;
+  }
+
+  // Step 2: Fetch progressive profile view for the current template
+  tpbPreviewFieldValues = {};
+  const personId    = person.id || person.personId;
+  const templateName = tpbTemplate.templateName;
+  if (personId && templateName && cfg.workspaceId) {
+    try {
+      if (rowsEl) rowsEl.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Loading profile data…</span>';
+      const profileData = await api('GET',
+        `/v1/api/progressive-profile-view/workspace-id/${cfg.workspaceId}/person-id/${encodeURIComponent(personId)}/template-name/${encodeURIComponent(templateName)}`
+      );
+      // Response shape: { data: [ { displayName, value, ... }, ... ] } or { attributes: [...] }
+      const attrs = profileData.data || profileData.attributes || profileData || [];
+      const attrArray = Array.isArray(attrs) ? attrs : Object.values(attrs);
+      // Build lookup by both displayName (→ label) and key
+      attrArray.forEach(attr => {
+        const rawVal = attr.result ?? attr.value ?? attr.queryResult ?? '';
+        const val    = rawVal === null || rawVal === undefined ? '' : String(rawVal);
+        if (attr.displayName) tpbPreviewFieldValues[attr.displayName] = val;
+        if (attr.key)         tpbPreviewFieldValues[attr.key]         = val;
+      });
+    } catch (e) {
+      // Template not published yet or other error — silently fall back to mock values
+      // Show a subtle indicator in the rows area
+      tpbPreviewFieldValues = { _error: e.status === 404 ? 'Template not yet published — showing mock values' : e.message };
+    }
+  }
+
+  tpbRenderPreview();
+}
+
+function tpbRenderPreview() {
+  const payload    = tpbBuildPayload();
+  const validation = tpbValidate(payload);
+
+  // Person context
+  const personEl = document.getElementById('tpb-preview-person');
+  if (personEl) {
+    if (tpbPreviewPerson) {
+      const p = tpbPreviewPerson;
+      const name = `${p.firstName || ''} ${p.lastName || ''}`.trim() || '(No Name)';
+      const phones = (p.phone || []).map(v => `<span class="alias-tag"><span>📞</span>${escapeHtml(v)}</span>`).join('');
+      const emails = (p.email || []).map(v => `<span class="alias-tag"><span>✉️</span>${escapeHtml(v)}</span>`).join('');
+      personEl.innerHTML = `
+        <div style="padding:6px 0 10px;border-bottom:1px solid var(--border);margin-bottom:10px">
+          <div style="font-weight:600;font-size:13px;color:var(--text)">${escapeHtml(name)}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">ID: ${escapeHtml(p.id || p.personId || '')}</div>
+          ${phones ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${phones}</div>` : ''}
+          ${emails ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${emails}</div>` : ''}
+        </div>`;
+    } else {
+      personEl.innerHTML = '';
+    }
+  }
+
+  // Preview rows
+  const rows = document.getElementById('tpb-preview-rows');
+  if (rows) {
+    if (!tpbTemplate.fields.length) {
+      rows.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">No fields defined.</p>`;
+    } else {
+      const hasRealData = tpbPreviewPerson && Object.keys(tpbPreviewFieldValues).filter(k => k !== '_error').length > 0;
+      const fallbackMsg = tpbPreviewFieldValues._error
+        ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;font-style:italic">${escapeHtml(tpbPreviewFieldValues._error)}</div>`
+        : '';
+      const fieldRows = tpbTemplate.fields
+        .slice().sort((a, b) => a.order - b.order)
+        .map(f => {
+          // Try real value: match by field key, then by label (displayName in API response)
+          const realVal = tpbPreviewFieldValues[f.key] ?? tpbPreviewFieldValues[f.label] ?? null;
+          const isReal  = realVal !== null && realVal !== '';
+          const display = isReal ? realVal : (tpbPreviewPerson ? (f.emptyStateText || '—') : tpbMockValue(f));
+          const style   = !isReal && tpbPreviewPerson ? 'color:var(--text-muted);font-style:italic' : '';
+          return `
+            <div class="tpb-preview-row">
+              <span class="tpb-preview-label">${escapeHtml(f.label)}</span>
+              <span class="tpb-preview-value" style="${style}">${escapeHtml(String(display))}</span>
+            </div>`;
+        }).join('');
+      rows.innerHTML = fallbackMsg + fieldRows;
+    }
+  }
+
+  // JSON pane
+  const jsonBox = document.getElementById('tpb-json-box');
+  if (jsonBox) jsonBox.textContent = JSON.stringify(payload, null, 2);
+
+  // Validation pane
+  const title  = document.getElementById('tpb-validation-title');
+  const issues = document.getElementById('tpb-validation-issues');
+  if (title)  title.innerHTML = validation.apiReady
+    ? `<span class="tpb-api-ready">✅ API Ready</span>`
+    : `<span class="tpb-api-notready">⚠️ Validation Issues</span>`;
+  if (issues) {
+    if (!validation.issues.length) {
+      issues.innerHTML = `<p style="font-size:12px;color:var(--text-muted)">No issues found.</p>`;
+    } else {
+      issues.innerHTML = validation.issues.map(issue => `
+        <div class="tpb-issue tpb-issue-${issue.severity}">
+          <div class="tpb-issue-severity">${escapeHtml(issue.severity)}</div>
+          <div class="tpb-issue-path">${escapeHtml(issue.path)}</div>
+          <p class="tpb-issue-msg">${escapeHtml(issue.message)}</p>
+        </div>`).join('');
+    }
+  }
+
+  // Publish button state
+  const pubBtn = document.getElementById('tpb-publish-btn');
+  const draftBtn = document.getElementById('tpb-save-draft-btn');
+  const ro = tpbIsReadOnly();
+  if (pubBtn)   { pubBtn.style.display = ro ? 'none' : ''; if (!ro) { pubBtn.disabled = !validation.apiReady; pubBtn.style.opacity = validation.apiReady ? '1' : '0.45'; } }
+  if (draftBtn) draftBtn.style.display = ro ? 'none' : '';
+}
+
+// ── Build API payload ────────────────────────────────────────────────────────
+function tpbBuildPayload() {
+  return {
+    templateName: tpbTemplate.templateName,
+    displayName:  tpbTemplate.displayName,
+    description:  tpbTemplate.description || '',
+    workspaceId:  tpbTemplate.workspaceId,
+    version:      tpbTemplate.version,
+    fields: tpbTemplate.fields
+      .slice().sort((a, b) => a.order - b.order)
+      .map(f => ({
+        key:            f.key,
+        label:          f.label,
+        displayType:    f.displayType,
+        calculation:    f.calculation,
+        eventType:      f.eventType,
+        dataPath:       f.dataPath,
+        timeWindow:     f.timeWindow,
+        emptyStateText: f.emptyStateText,
+        order:          f.order,
+        ...(f.source                                                         ? { source: f.source }                         : {}),
+        ...(f.description                                                     ? { description: f.description }               : {}),
+        ...((f.filters || []).length                                          ? { filters: f.filters.map(({id, ...r}) => r) } : {}),
+        ...(f.timeWindow === 'custom' && f.customTimeWindow                   ? { customTimeWindow: f.customTimeWindow }       : {}),
+        ...(f.displayOptions && Object.keys(f.displayOptions).length          ? { displayOptions: f.displayOptions }           : {}),
+        ...(f.visibilityRule                                                  ? { visibilityRule: f.visibilityRule }           : {}),
+      })),
+  };
+}
+
+// ── Validation ───────────────────────────────────────────────────────────────
+function tpbValidate(payload) {
+  const issues = [];
+  const t = tpbTemplate;
+
+  if (!t.templateName.trim())
+    issues.push({ severity: 'error', path: 'templateName', message: 'Template API name is required.' });
+  if (!t.displayName.trim())
+    issues.push({ severity: 'error', path: 'displayName',  message: 'Display name is required.' });
+  if (!t.workspaceId.trim())
+    issues.push({ severity: 'error', path: 'workspaceId',  message: 'Workspace ID is required.' });
+  if (!t.fields.length)
+    issues.push({ severity: 'error', path: 'fields',       message: 'At least one field is required.' });
+
+  const seenIds    = new Set();
+  const seenOrders = new Set();
+
+  t.fields.forEach((f, i) => {
+    if (!f.key || !f.key.trim())
+      issues.push({ severity: 'error', path: `fields[${i}].key`, message: 'Field key is required.' });
+    else if (!/^[a-zA-Z0-9_-]+$/.test(f.key))
+      issues.push({ severity: 'error', path: `fields[${i}].key`, message: 'Key must contain only letters, numbers, hyphens, or underscores.' });
+    if (seenIds.has(f.key))
+      issues.push({ severity: 'error', path: `fields[${i}].key`, message: 'Field keys must be unique.' });
+    seenIds.add(f.key);
+
+    if (!f.label || !f.label.trim())
+      issues.push({ severity: 'error', path: `fields[${i}].label`, message: 'Field label is required.' });
+    else if (f.label.trim().length < 2 || f.label.trim().length > 60)
+      issues.push({ severity: 'error', path: `fields[${i}].label`, message: 'Label must be 2–60 characters.' });
+
+    if (seenOrders.has(f.order))
+      issues.push({ severity: 'error', path: `fields[${i}].order`, message: 'Field order values must be unique.' });
+    seenOrders.add(f.order);
+
+    if (!f.source)
+      issues.push({ severity: 'error', path: `fields[${i}].source`, message: 'Source is required.' });
+
+    if (!f.eventType)
+      issues.push({ severity: 'error', path: `fields[${i}].eventType`, message: 'Event type is required.' });
+
+    if (f.calculation !== 'countMatchingEvents' && f.calculation !== 'exists' && !f.dataPath)
+      issues.push({ severity: 'error', path: `fields[${i}].dataPath`, message: 'Data path is required for this calculation type.' });
+
+    // Display type must be valid for the selected calculation
+    if (f.calculation && f.displayType && !tpbValidDisplayTypes(f.calculation).includes(f.displayType))
+      issues.push({ severity: 'error', path: `fields[${i}].displayType`, message: `Display type "${f.displayType}" is not valid for calculation "${f.calculation}".` });
+
+    // Numeric calculations require a numeric data path
+    if (tpbCalcNeedsNumeric(f.calculation) && f.dataPath) {
+      const pathDef = tpbGetDataPathDef(f.eventType, f.dataPath);
+      if (pathDef && pathDef.type !== 'number' && pathDef.type !== 'currency')
+        issues.push({ severity: 'error', path: `fields[${i}].dataPath`, message: 'This calculation requires a numeric data path.' });
+    }
+
+    // Custom time window validation
+    if (f.timeWindow === 'custom') {
+      if (!f.customTimeWindow || !f.customTimeWindow.amount || f.customTimeWindow.amount < 1)
+        issues.push({ severity: 'error', path: `fields[${i}].customTimeWindow`, message: 'Custom time window requires a valid amount (≥ 1).' });
+    }
+
+    // Filter row completeness
+    (f.filters || []).forEach((fl, fi) => {
+      if (!fl.fieldPath || !fl.operator)
+        issues.push({ severity: 'error', path: `fields[${i}].filters[${fi}]`, message: 'Each filter must have a field path and operator.' });
+      else if (fl.value === undefined || fl.value === '')
+        issues.push({ severity: 'warning', path: `fields[${i}].filters[${fi}]`, message: 'Filter value is empty — filter may not behave as expected.' });
+    });
+
+    if (!f.emptyStateText)
+      issues.push({ severity: 'warning', path: `fields[${i}].emptyStateText`, message: 'Empty-state text is recommended.' });
+  });
+
+  try { JSON.stringify(payload); }
+  catch { issues.push({ severity: 'error', path: 'payload', message: 'Generated JSON payload is not properly formed.' }); }
+
+  return { apiReady: issues.every(i => i.severity !== 'error'), issues };
+}
+
+// ── Mock preview values ───────────────────────────────────────────────────────
+function tpbMockValue(field) {
+  switch (field.displayType) {
+    case 'number':    return '3';
+    case 'badge':     return 'Yes';
+    case 'timestamp': return 'Apr 27, 2026 10:15 AM';
+    case 'boolean':   return 'True';
+    default: return field.key === 'lastContactChannel' ? 'Voice' : 'Sample value';
+  }
+}
+
+// ── Copy template ─────────────────────────────────────────────────────────────
+function tpbOpenCopyModal() {
+  const dn = document.getElementById('tpb-copy-displayName');
+  const tn = document.getElementById('tpb-copy-templateName');
+  const err = document.getElementById('tpb-copy-error');
+  if (dn) dn.value = 'Copy of ' + (tpbTemplate.displayName || 'Template');
+  if (tn) tn.value = 'copy-of-' + (tpbTemplate.templateName || 'template').replace(/\s+/g, '-');
+  if (err) err.innerHTML = '';
+  document.getElementById('tpb-copy-modal').classList.add('open');
+}
+
+function tpbConfirmCopy() {
+  const dn  = (document.getElementById('tpb-copy-displayName')  || {}).value || '';
+  const tn  = (document.getElementById('tpb-copy-templateName') || {}).value || '';
+  const err = document.getElementById('tpb-copy-error');
+
+  if (!dn.trim() || !tn.trim()) {
+    if (err) err.innerHTML = '<div class="alert alert-error">Both fields are required.</div>';
+    return;
+  }
+  if (tn.trim() === 'journey-default-template') {
+    if (err) err.innerHTML = '<div class="alert alert-error">Cannot use the reserved name "journey-default-template".</div>';
+    return;
+  }
+
+  // Deep-clone, strip id, set new names
+  const copy = JSON.parse(JSON.stringify(tpbTemplate));
+  delete copy.id;
+  copy.displayName  = dn.trim();
+  copy.templateName = tn.trim();
+  copy.status = 'draft';
+
+  tpbTemplate = copy;
+  tpbActiveLibrary = '';
+  tpbSelectedFieldKey = copy.fields[0]?.key || null;
+
+  closeModal('tpb-copy-modal');
+  tpbRenderLibrary();
+  tpbRenderMeta();
+  tpbRenderFieldList();
+  tpbRenderFieldEditor();
+  tpbRenderPreview();
+}
+
+// ── Save draft (local) ───────────────────────────────────────────────────────
+function tpbSaveDraft() {
+  try {
+    localStorage.setItem('tpb_draft', JSON.stringify(tpbTemplate));
+    alert_html('success', 'Draft saved to local storage.');
+    // Show brief toast
+    const btn = document.querySelector('.tpb-footer .btn-secondary');
+    if (btn) { const orig = btn.textContent; btn.textContent = '✅ Saved!'; setTimeout(() => btn.textContent = orig, 1500); }
+  } catch (e) { /* ignore */ }
+}
+
+// ── Publish to API ────────────────────────────────────────────────────────────
+async function tpbPublish() {
+  const payload    = tpbBuildPayload();
+  const validation = tpbValidate(payload);
+  if (!validation.apiReady) return;
+
+  const pubBtn = document.getElementById('tpb-publish-btn');
+  const orig = pubBtn ? pubBtn.textContent : '';
+  if (pubBtn) { pubBtn.disabled = true; pubBtn.textContent = '⏳ Saving…'; }
+
+  try {
+    const wsId = tpbTemplate.workspaceId || cfg.workspaceId;
+    if (tpbTemplate.id) {
+      await api('PUT', `/admin/v1/api/profile-view-template/workspace-id/${wsId}/template-id/${tpbTemplate.id}`, payload);
+    } else {
+      const result = await api('POST', `/admin/v1/api/profile-view-template/workspace-id/${wsId}`, payload);
+      if (result && result.id) tpbTemplate.id = result.id;
+    }
+    if (pubBtn) { pubBtn.textContent = '✅ Saved!'; setTimeout(() => { pubBtn.textContent = orig; pubBtn.disabled = false; }, 2000); }
+  } catch (e) {
+    if (pubBtn) { pubBtn.textContent = orig; pubBtn.disabled = false; }
+    alert('Error saving template: ' + e.message);
+  }
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+// Load config from server env vars, then fall back to localStorage.
+// Server values are only applied when the user has NOT already set their own value
+// in localStorage — this prevents the server env from overwriting user changes made in Settings.
+async function loadServerConfig() {
+  try {
+    const res = await fetch('/config');
+    const serverCfg = await res.json();
+    if (serverCfg.region && !localStorage.getItem('jds_region')) {
+      cfg.region = serverCfg.region; localStorage.setItem('jds_region', cfg.region);
+    }
+    if (serverCfg.workspaceId && !localStorage.getItem('jds_workspace')) {
+      cfg.workspaceId = serverCfg.workspaceId; localStorage.setItem('jds_workspace', cfg.workspaceId);
+    }
+  } catch (e) { /* local dev fallback */ }
+
+  // Check auth status from server
+  try {
+    const res = await fetch('/auth/status');
+    authStatus = await res.json();
+  } catch (e) { authStatus = { authenticated: false, hasRefreshToken: false, expiresInSeconds: 0 }; }
+
+  updateConfigDot();
+
+  // Open settings only if workspace is missing or not authenticated
+  if (!cfg.workspaceId || !authStatus.authenticated) {
+    setTimeout(openSettings, 300);
+  }
+}
+loadServerConfig();
+
+// Refresh auth status every 5 minutes to keep the dot accurate
+setInterval(async () => {
+  try {
+    const res = await fetch('/auth/status');
+    authStatus = await res.json();
+  updateConfigDot();
+  wsEnsureCurrent(); // seed history with the boot workspace if not already present
+  } catch (e) {}
+}, 5 * 60 * 1000);
+</script>
+<!-- Shared fixed-position pip tooltip — lives outside all scroll/overflow containers -->
+<div id="pip-tooltip-overlay"></div>
+
+</body>
+</html>
