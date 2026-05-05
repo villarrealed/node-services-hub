@@ -91,7 +91,7 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "node-services-hub",
-    version: "0.5.0",
+    version: "0.6.0",
     mounted: MOUNTED,
     uptime_sec: Math.round(process.uptime()),
   });

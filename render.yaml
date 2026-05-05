@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: node-services-hub
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    branch: main
+    envVars:
+      # ─── Hub-level configuration ───────────────────────────────────────────
+      - key: BASE_URL
+        value: https://node-services-hub.onrender.com
+      
+      # ─── JDS Web Manager (/jds) ────────────────────────────────────────────
+      # Webex OAuth credentials for JDS API access
+      - key: WEBEX_CLIENT_ID
+        sync: false
+      - key: WEBEX_CLIENT_SECRET
+        sync: false
+      
+      # Optional: JDS region and workspace (leave empty if not needed)
+      - key: CJDS_REGION
+        value: ""
+      - key: CJDS_WORKSPACE_ID
+        value: ""
+      
+      # Optional: Initial token (can be left empty, OAuth will populate)
+      - key: CJDS_TOKEN
+        value: ""
+      
+      # ─── WxCC Config MCP (/wxcc) ───────────────────────────────────────────
+      # Webex OAuth credentials for WxCC API access
+      - key: WXCC_CLIENT_ID
+        sync: false
+      - key: WXCC_CLIENT_SECRET
+        sync: false
+      
+      # Optional: WxCC region (defaults to us1)
+      - key: WXCC_REGION
+        value: us1
+      
+      # Optional: WxCC org ID (auto-discovered from token if not set)
+      - key: WXCC_ORG_ID
+        value: ""
+      
+      # ─── Shared: Upstash Redis (token persistence for /jds and /wxcc) ─────
+      # Optional but recommended: prevents token loss on Render restarts
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      
+      # ─── Farmers Insurance MCP (/farmers) ──────────────────────────────────
+      # No environment variables required (all data hardcoded for demo)
