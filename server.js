@@ -17,6 +17,7 @@ import express from "express";
 import cors from "cors";
 
 import jdsRouter from "./apps/jds-web-manager/router.js";
+import wxccRouter from "./apps/wxcc-config-mcp/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,12 +33,15 @@ const MOUNTED = [];
 app.use("/jds", jdsRouter);
 MOUNTED.push({ prefix: "/jds", name: "jds-web-manager" });
 
+app.use("/wxcc", wxccRouter);
+MOUNTED.push({ prefix: "/wxcc", name: "wxcc-config-mcp" });
+
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "node-services-hub",
-    version: "0.2.0",
+    version: "0.3.0",
     mounted: MOUNTED,
     uptime_sec: Math.round(process.uptime()),
   });

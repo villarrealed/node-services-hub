@@ -1,6 +1,6 @@
 {
   "name": "node-services-hub",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Multi-app Express hub: consolidates multiple Node services under one Render plan to avoid free-tier spin-down.",
   "main": "server.js",
   "type": "module",
@@ -12,9 +12,11 @@
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.21.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "cors": "^2.8.5",
-    "node-fetch": "^2.7.0"
+    "express": "^4.21.0",
+    "node-fetch": "^2.7.0",
+    "zod": "^3.22.0"
   },
   "license": "MIT",
   "author": "Ed Villarreal",
