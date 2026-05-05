@@ -18,6 +18,7 @@ import cors from "cors";
 
 import jdsRouter from "./apps/jds-web-manager/router.js";
 import wxccRouter from "./apps/wxcc-config-mcp/router.js";
+import farmersRouter from "./apps/farmers-insurance-mcp/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,12 +37,15 @@ MOUNTED.push({ prefix: "/jds", name: "jds-web-manager" });
 app.use("/wxcc", wxccRouter);
 MOUNTED.push({ prefix: "/wxcc", name: "wxcc-config-mcp" });
 
+app.use("/farmers", farmersRouter);
+MOUNTED.push({ prefix: "/farmers", name: "farmers-insurance-mcp" });
+
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "node-services-hub",
-    version: "0.3.0",
+    version: "0.4.0",
     mounted: MOUNTED,
     uptime_sec: Math.round(process.uptime()),
   });
