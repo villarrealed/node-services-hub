@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>node-services-hub</title>
+  <meta name="description" content="Cisco demo services consolidated on one Render plan.">
+  <style>
+    :root {
+      --bg: #07111f;
+      --bg-soft: rgba(14, 28, 49, 0.82);
+      --panel: rgba(10, 21, 38, 0.78);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --text: #f4f8fb;
+      --muted: #9eb3c7;
+      --blue: #1ba0d7;
+      --blue-strong: #00bceb;
+      --cyan: #7ce8ff;
+      --green: #2fdc8c;
+      --red: #ff6b81;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      --radius: 24px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(0, 188, 235, 0.2), transparent 30%),
+        radial-gradient(circle at 85% 15%, rgba(27, 160, 215, 0.18), transparent 24%),
+        linear-gradient(180deg, #0a1526 0%, #07111f 55%, #050b14 100%);
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    body::before {
+      background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,0.6), transparent 85%);
+    }
+
+    body::after {
+      background: linear-gradient(135deg, transparent 0 62%, rgba(124, 232, 255, 0.08) 62% 64%, transparent 64% 100%);
+      opacity: 0.9;
+    }
+
+    a { color: inherit; }
+
+    .page {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 28px;
+    }
+
+    .hero {
+      position: relative;
+      padding: 28px;
+      border: 1px solid var(--panel-border);
+      border-radius: calc(var(--radius) + 4px);
+      background: linear-gradient(145deg, rgba(14, 29, 51, 0.94), rgba(7, 17, 31, 0.86));
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: auto 0 0 auto;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(0, 188, 235, 0.24), transparent 68%);
+      transform: translate(26%, 18%);
+      z-index: -1;
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 16px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 44px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(124, 232, 255, 0.2), rgba(124, 232, 255, 1));
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.3rem, 5vw, 4.8rem);
+      line-height: 0.95;
+      letter-spacing: -0.045em;
+      max-width: 9ch;
+    }
+
+    .subtitle {
+      margin: 18px 0 0;
+      max-width: 44rem;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.6vw, 1.15rem);
+      line-height: 1.65;
+    }
+
+    .hero-meta {
+      display: grid;
+      gap: 12px;
+      min-width: 212px;
+    }
+
+    .meta-chip {
+      padding: 14px 16px;
+      border: 1px solid rgba(124, 232, 255, 0.15);
+      border-radius: 18px;
+      background: rgba(6, 17, 31, 0.55);
+      backdrop-filter: blur(10px);
+    }
+
+    .meta-label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .meta-value {
+      font-size: 0.98rem;
+      font-weight: 600;
+    }
+
+    .services {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 260px;
+      padding: 22px;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, var(--bg-soft), var(--panel));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(124, 232, 255, 0.32);
+      box-shadow: 0 28px 64px rgba(0, 0, 0, 0.4);
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      opacity: 0.95;
+    }
+
+    .card-head,
+    .card-foot,
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .card-kicker {
+      margin: 0 0 8px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.45rem;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.98rem;
+    }
+
+    .path {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      padding: 8px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      color: #d4e6f5;
+      font: 600 0.84rem/1 var(--mono);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #d8e7f5;
+      font-size: 0.84rem;
+      font-weight: 700;
+      text-transform: lowercase;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #8798aa;
+      box-shadow: 0 0 0 5px rgba(135, 152, 170, 0.12);
+      transition: background 180ms ease, box-shadow 180ms ease;
+    }
+
+    .status.is-online .status-dot {
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(47, 220, 140, 0.15);
+    }
+
+    .status.is-down .status-dot {
+      background: var(--red);
+      box-shadow: 0 0 0 5px rgba(255, 107, 129, 0.14);
+    }
+
+    .action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 108px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue), var(--blue-strong));
+      color: #03111d;
+      text-decoration: none;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      transition: transform 180ms ease, filter 180ms ease;
+    }
+
+    .action:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.06);
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 2px 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .footer-links {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .footer a {
+      text-decoration: none;
+      color: #d9ecfa;
+      border-bottom: 1px solid rgba(124, 232, 255, 0.25);
+    }
+
+    .footer a:hover { border-bottom-color: rgba(124, 232, 255, 0.7); }
+
+    .bridge {
+      display: inline-grid;
+      grid-auto-flow: column;
+      gap: 4px;
+      align-self: start;
+      padding-top: 6px;
+    }
+
+    .bridge span {
+      width: 7px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(124, 232, 255, 0.95), rgba(0, 188, 235, 0.3));
+    }
+
+    .bridge span:nth-child(1), .bridge span:nth-child(9) { height: 18px; }
+    .bridge span:nth-child(2), .bridge span:nth-child(8) { height: 24px; }
+    .bridge span:nth-child(3), .bridge span:nth-child(7) { height: 30px; }
+    .bridge span:nth-child(4), .bridge span:nth-child(6) { height: 36px; }
+    .bridge span:nth-child(5) { height: 42px; }
+
+    @media (max-width: 920px) {
+      .hero-top,
+      .footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .services {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-meta {
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page { width: min(100% - 20px, 1120px); padding-top: 18px; }
+      .hero, .card { padding: 18px; border-radius: 20px; }
+      .hero-meta { grid-template-columns: 1fr; }
+      .card-head, .card-foot, .status-row { flex-direction: column; align-items: flex-start; }
+      .bridge { transform: scale(0.9); transform-origin: left top; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <p class="eyebrow">Cisco demo hub</p>
+          <h1>node-services-hub</h1>
+          <p class="subtitle">Cisco demo services consolidated on one Render plan</p>
+        </div>
+        <div class="hero-meta" aria-label="Hub summary">
+          <div class="meta-chip">
+            <span class="meta-label">Mounted apps</span>
+            <span class="meta-value">3 live services</span>
+          </div>
+          <div class="meta-chip">
+            <span class="meta-label">Landing page</span>
+            <span class="meta-value">Static + live status API</span>
+          </div>
+        </div>
+      </div>
+
+      <section class="services" aria-label="Mounted services">
+        <article class="card" data-prefix="/jds">
+          <div class="card-head">
+            <div>
+              <p class="card-kicker">Service 01</p>
+              <h2>JDS Web Manager</h2>
+            </div>
+            <div class="bridge" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <p>Cisco Journey Data Services admin UI · OAuth + REST proxy</p>
+          <div class="status-row">
+            <span class="path">/jds</span>
+            <span class="status" data-status>
+              <span class="status-dot"></span>
+              <span class="status-text">checking</span>
+            </span>
+          </div>
+          <div class="card-foot">
+            <a class="action" href="/jds/">Open</a>
+          </div>
+        </article>
+
+        <article class="card" data-prefix="/wxcc">
+          <div class="card-head">
+            <div>
+              <p class="card-kicker">Service 02</p>
+              <h2>WxCC Config MCP</h2>
+            </div>
+            <div class="bridge" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <p>Webex Contact Center configuration via MCP · 17 tools</p>
+          <div class="status-row">
+            <span class="path">/wxcc</span>
+            <span class="status" data-status>
+              <span class="status-dot"></span>
+              <span class="status-text">checking</span>
+            </span>
+          </div>
+          <div class="card-foot">
+            <a class="action" href="/wxcc/">Manifest</a>
+          </div>
+        </article>
+
+        <article class="card" data-prefix="/farmers">
+          <div class="card-head">
+            <div>
+              <p class="card-kicker">Service 03</p>
+              <h2>Farmers Insurance MCP</h2>
+            </div>
+            <div class="bridge" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <p>Demo MCP for Webex AI Agent Lab · 3 tools</p>
+          <div class="status-row">
+            <span class="path">/farmers</span>
+            <span class="status" data-status>
+              <span class="status-dot"></span>
+              <span class="status-text">checking</span>
+            </span>
+          </div>
+          <div class="card-foot">
+            <a class="action" href="/farmers/">Manifest</a>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <footer class="footer">
+      <span>Internal dashboard for bundled demo services.</span>
+      <span class="footer-links">
+        <a href="https://github.com/villarrealed/node-services-hub">GitHub repo</a>
+        <a href="/health">Hub health</a>
+      </span>
+    </footer>
+  </main>
+
+  <script>
+    (async function () {
+      const cards = Array.from(document.querySelectorAll("[data-prefix]"));
+      const setStatus = function (card, state, label) {
+        const badge = card.querySelector("[data-status]");
+        const text = card.querySelector(".status-text");
+        badge.classList.remove("is-online", "is-down");
+        if (state) badge.classList.add(state);
+        text.textContent = label;
+      };
+
+      try {
+        const res = await fetch("/_status", { headers: { Accept: "application/json" } });
+        if (!res.ok) throw new Error("status request failed");
+        const data = await res.json();
+        const byPrefix = Object.fromEntries((data.apps || []).map(function (app) {
+          return [app.prefix, app];
+        }));
+
+        cards.forEach(function (card) {
+          const app = byPrefix[card.dataset.prefix];
+          if (!app) return setStatus(card, "is-down", "unknown");
+          setStatus(card, app.ok ? "is-online" : "is-down", app.ok ? "online" : "down");
+        });
+      } catch (_error) {
+        cards.forEach(function (card) {
+          setStatus(card, "is-down", "down");
+        });
+      }
+    }());
+  </script>
+</body>
+</html>
