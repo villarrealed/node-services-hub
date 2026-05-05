@@ -207,6 +207,12 @@ function getSpaHtml() {
 </script>
 `;
   spaHtmlCache = raw.replace(/<head([^>]*)>/i, (m) => m + shim);
+  // Rewrite hard navigations: window.location.href = '/auth/...' / '/api/...' / '/config'
+  // The fetch shim above only catches fetch() calls; hard nav bypasses <base href>.
+  spaHtmlCache = spaHtmlCache.replace(
+    /(window\.location\.href\s*=\s*['"])(\/(?:auth|api|config))/g,
+    "$1/jds$2"
+  );
   return spaHtmlCache;
 }
 
