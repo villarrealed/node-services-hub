@@ -13,9 +13,12 @@
  *   - lookup_agency_by_dnis     (RADD lookupCode: EAAgentLookup)
  *   - lookup_customer_by_ani    (RADD lookupCode: EACustLookup2)
  *
- * v2 (later) will add the remaining 5 RADD tools:
- *   - lookup_customer_by_phone, check_webex_available,
- *     lookup_destination, upsert_session_data, get_session_data
+ * v2 (this commit) completes the RADD surface:
+ *   - lookup_customer_by_phone  (EACustLookup2 via manual-entry path)
+ *   - check_webex_available     (RADD lookupCode: WebexAvailable)
+ *   - lookup_destination        (RADD lookupCode: DestinationLookup)
+ *   - upsert_session_data       (RADD upsert for VACustSessionData — Paymentus preserve)
+ *   - get_session_data          (RADD lookupCode: VACustSessionData — Paymentus return)
  *
  * Pattern: mirrors apps/farmers-insurance-mcp/router.js — custom JSON-RPC,
  * in-memory hardcoded fixtures, per-app CORS, request log, manifest endpoint.
@@ -155,6 +158,53 @@ const CUSTOMERS = {
   },
 };
 
+/**
+ * DESTINATIONS — keyed lookup by RADD DestinationLookup `lookupValue`.
+ *
+ * The destination_type values come straight from the requirements doc:
+ *   - VARetEligibleDestination  (FR 7.2 & 8.2.2 — retention-eligible transfer)
+ *   - VA_FSA_Destination        (FR 7.4 — unlicensed FSA transfer)
+ *   - VA_FSA_LicDestination     (FR 7.4 — licensed FSA transfer)
+ *
+ * Each entry stores the parsed PQ (PrincipalQueue / transfer destination) and
+ * BU (BusinessUnit). The handler assembles them into the production-shape
+ * returnValue1 string `PQ : xxx | BU : xxx`.
+ */
+const DESTINATIONS = {
+  VARetEligibleDestination: { PQ: "RetentionQ_TF", BU: "Retention" },
+  VA_FSA_Destination: { PQ: "FSA_Unlicensed_TF", BU: "FSAUnlicensed" },
+  VA_FSA_LicDestination: { PQ: "FSA_Licensed_TF", BU: "FSALicensed" },
+};
+
+/**
+ * SESSION_STORE — in-memory Paymentus-preserve session data.
+ *
+ * Keyed by ANI (digits only). Holds the most recent upsert per customer.
+ * Used by the Paymentus preserve/retrieve flow (FR 6.4 / 6.5):
+ *   - Before transferring to Paymentus, the IVR upserts session data
+ *     (ATT, AgencyTransferNumber, AgencySETN) so it can resume routing
+ *     when the customer returns from the payment portal.
+ *   - On return, the IVR looks up by ANI and checks the timestamp diff —
+ *     if < 10 minutes, it plays the "payment success" prompt and routes
+ *     using the preserved ATT/transfer-number values.
+ *
+ * Resets on every Render redeploy. Acceptable for a demo — for production
+ * persistence the existing Upstash Redis pattern in apps/jds-web-manager
+ * could be reused.
+ */
+const SESSION_STORE = new Map();
+const SESSION_WINDOW_SECONDS = 600; // 10 minutes per FR 6.5.2
+
+/**
+ * WebexAvailable toggle — env-driven so a presenter can flip it on stage
+ * to demo the "Webex unavailable" fallback path. Default Y (available).
+ * Set RADD_SIM_WEBEX_AVAILABLE=N before starting the server to flip.
+ */
+function getWebexAvailable() {
+  const env = (process.env.RADD_SIM_WEBEX_AVAILABLE || "Y").toUpperCase();
+  return env === "N" ? "N" : "Y";
+}
+
 // ============================================================
 // RADD RESPONSE BUILDERS — produce the pipe-delimited strings
 // that match production RADD output verbatim.
@@ -218,6 +268,33 @@ function buildCustomerReturnValue1(c) {
   return parts.join(" | ");
 }
 
+/**
+ * Assemble the DestinationLookup returnValue1 string.
+ * Format inferred from FR 7.2 and 7.4: name/value pairs PQ and BU.
+ *   "PQ : xxxx | BU : xxxx"
+ */
+function buildDestinationReturnValue1(d) {
+  return `PQ : ${d.PQ} | BU : ${d.BU}`;
+}
+
+/**
+ * Assemble the VACustSessionData returnValue1 string.
+ * Format (from FR 6.4 / 6.5):
+ *   "InsertTime : Timestamp | ATT = [att value] | AgencyTransferNumber : xxx | AgencySETN : xxx"
+ *
+ * Note the inconsistent separators in the spec (`InsertTime :` with colon,
+ * `ATT =` with equals) — preserved verbatim so consumers parsing the string
+ * see exactly what production RADD returns.
+ */
+function buildSessionReturnValue1(s) {
+  return [
+    `InsertTime : ${s.InsertTime}`,
+    `ATT = ${s.ATT}`,
+    `AgencyTransferNumber : ${s.AgencyTransferNumber}`,
+    `AgencySETN : ${s.AgencySETN || ""}`,
+  ].join(" | ");
+}
+
 // ============================================================
 // TOOL SCHEMAS
 // ============================================================
@@ -250,6 +327,94 @@ const TOOL_SCHEMAS = [
           type: "string",
           description:
             "Automatic Number Identification — the caller's phone number. Accepts any common format. Demo customers: 6235550111 (John Smith, retention+open-claim), 6235550112 (Maria Garcia, Paymentus-eligible multiline), 6235550113 (Robert Chen, Bristol West Auto). Other ANIs return found=false.",
+        },
+      },
+      required: ["ani"],
+    },
+  },
+  {
+    name: "lookup_customer_by_phone",
+    description:
+      "Looks up Farmers customer record by a phone number the caller manually entered (because their ANI was not recognized or they pressed a key to enter a different number). Functionally equivalent to lookup_customer_by_ani but the response is annotated with manualEntry=true so downstream flow logic can branch on it (e.g. play different prompts, log differently). Equivalent to the RADD EACustLookup2 web service call invoked from the manual-entry path (FR 2.6.1).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        phone: {
+          type: "string",
+          description:
+            "The phone number the caller entered manually. Accepts any common format. Same demo customer set as lookup_customer_by_ani.",
+        },
+      },
+      required: ["phone"],
+    },
+  },
+  {
+    name: "check_webex_available",
+    description:
+      "Checks whether Webex Calling is available for inbound routing. Equivalent to the RADD WebexAvailable web service call (FR 2.2). Returns WebexAvail = Y or N. If WebexAvail = N, the IVR flow should fall back to the legacy touch-tone IVR path (simulated in this demo). Per spec, if the lookup itself fails the variable is treated as Y (fail-open). For demo purposes the returned value is controlled by the RADD_SIM_WEBEX_AVAILABLE environment variable on the server (default Y) so a presenter can toggle the unavailability path on stage by restarting with N.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "lookup_destination",
+    description:
+      "Looks up a transfer destination by destination type. Equivalent to the RADD DestinationLookup web service call (FR 7.2, FR 7.4, FR 8.2.2). Returns the PQ (Principal Queue / transfer destination) and BU (Business Unit) for the requested destination type. The returnValue1 string follows the production format `PQ : xxx | BU : xxx`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        destination_type: {
+          type: "string",
+          enum: ["VARetEligibleDestination", "VA_FSA_Destination", "VA_FSA_LicDestination"],
+          description:
+            "Which destination to look up. VARetEligibleDestination = Customer Retention Team transfer (used by Retention Risk and Retention Eligible flows). VA_FSA_Destination = Farmers Service Advantage Unlicensed queue (used when intent is billing or documents). VA_FSA_LicDestination = Farmers Service Advantage Licensed queue (used for all other FSA-eligible intents).",
+        },
+      },
+      required: ["destination_type"],
+    },
+  },
+  {
+    name: "upsert_session_data",
+    description:
+      "Preserves IVR session data so it can be retrieved when the caller returns from Paymentus. Equivalent to the RADD VACustSessionData upsert web service call (FR 6.4). Stores the caller's ANI together with the agency routing values (ATT, AgencyTransferNumber, AgencySETN) and an InsertTime timestamp. The agent should call this immediately before transferring the customer out to the Paymentus toll-free number, so that get_session_data on return can resume routing using the preserved values within the 10-minute window.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ani: {
+          type: "string",
+          description: "The caller's ANI (phone number) — used as the lookup key. Required.",
+        },
+        att: {
+          type: "string",
+          description:
+            "Agency Transfer Type (1–5) from the EAAgentLookup result. Required so resume routing knows which transfer logic to follow.",
+        },
+        agency_transfer_number: {
+          type: "string",
+          description:
+            "AgencyTransferNumber from the EAAgentLookup result. Required — this is where the call returns to after Paymentus.",
+        },
+        agency_setn: {
+          type: "string",
+          description:
+            "AgencySETN (Agency Service Transfer Number) from the EAAgentLookup result. Optional — only relevant for ATT=2 routing.",
+        },
+      },
+      required: ["ani", "att", "agency_transfer_number"],
+    },
+  },
+  {
+    name: "get_session_data",
+    description:
+      "Retrieves preserved IVR session data for a returning Paymentus caller. Equivalent to the RADD VACustSessionData lookup (FR 6.5). Returns the previously upserted ATT, AgencyTransferNumber, and AgencySETN along with the InsertTime, age in seconds, and a within_10_min_window convenience flag. If no session record exists for the ANI, returns found=false so the flow can play the FR 6.5.2 'no record found' error prompt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ani: {
+          type: "string",
+          description: "The returning caller's ANI (phone number) — used as the lookup key.",
         },
       },
       required: ["ani"],
@@ -355,7 +520,199 @@ async function handleLookupCustomerByAni({ ani }) {
 const TOOL_HANDLERS = {
   lookup_agency_by_dnis: handleLookupAgencyByDnis,
   lookup_customer_by_ani: handleLookupCustomerByAni,
+  lookup_customer_by_phone: handleLookupCustomerByPhone,
+  check_webex_available: handleCheckWebexAvailable,
+  lookup_destination: handleLookupDestination,
+  upsert_session_data: handleUpsertSessionData,
+  get_session_data: handleGetSessionData,
 };
+
+// ----- v2 handlers -----
+
+/**
+ * Manual-entry path (FR 2.6.1). Same lookup as ANI but the response is
+ * annotated with manualEntry=true so downstream flow logic can branch.
+ */
+async function handleLookupCustomerByPhone({ phone }) {
+  const result = await handleLookupCustomerByAni({ ani: phone });
+  // Re-parse, inject manualEntry flag, re-serialize.
+  const parsed = JSON.parse(result.content[0].text);
+  parsed.manualEntry = true;
+  return {
+    content: [{ type: "text", text: JSON.stringify(parsed, null, 2) }],
+  };
+}
+
+async function handleCheckWebexAvailable() {
+  const webexAvail = getWebexAvailable();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            lookupCode: "WebexAvailable",
+            lookupValue: "1",
+            returnValue1: `WebexAvail : ${webexAvail}`,
+            parsed: { WebexAvail: webexAvail },
+            note:
+              webexAvail === "Y"
+                ? "Webex Calling is available — proceed with normal routing."
+                : "Webex Calling is unavailable — flow should fall back to legacy touch-tone IVR (simulated). Toggle by restarting server with RADD_SIM_WEBEX_AVAILABLE=Y.",
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+async function handleLookupDestination({ destination_type }) {
+  const dest = DESTINATIONS[destination_type];
+
+  if (!dest) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              found: false,
+              lookupCode: "DestinationLookup",
+              lookupValue: destination_type,
+              message: `Unknown destination_type '${destination_type}'. Valid types: ${Object.keys(
+                DESTINATIONS,
+              ).join(", ")}.`,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            found: true,
+            lookupCode: "DestinationLookup",
+            lookupValue: destination_type,
+            returnValue1: buildDestinationReturnValue1(dest),
+            parsed: dest,
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+async function handleUpsertSessionData({ ani, att, agency_transfer_number, agency_setn }) {
+  const normalizedAni = normalizePhone(ani);
+  if (!normalizedAni) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            { success: false, message: "ani is required and must contain digits." },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  }
+
+  const insertTime = new Date().toISOString();
+  const record = {
+    InsertTime: insertTime,
+    ATT: att,
+    AgencyTransferNumber: agency_transfer_number,
+    AgencySETN: agency_setn || "",
+  };
+  SESSION_STORE.set(normalizedAni, { timestamp: Date.now(), record });
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            success: true,
+            lookupCode: "VACustSessionData",
+            lookupValue: normalizedAni,
+            action: "upsert",
+            returnValue1: buildSessionReturnValue1(record),
+            parsed: record,
+            message: `Session data preserved for ANI ${normalizedAni}. Window: ${SESSION_WINDOW_SECONDS}s.`,
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+async function handleGetSessionData({ ani }) {
+  const normalizedAni = normalizePhone(ani);
+  const entry = SESSION_STORE.get(normalizedAni);
+
+  if (!entry) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              found: false,
+              lookupCode: "VACustSessionData",
+              lookupValue: normalizedAni,
+              message:
+                "No session record found. Per FR 6.5.2, set no_cust_Pmnts_error=Yes and play prompt 33 ('There seems to be a problem with the automated system…').",
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  }
+
+  const ageSeconds = Math.round((Date.now() - entry.timestamp) / 1000);
+  const withinWindow = ageSeconds < SESSION_WINDOW_SECONDS;
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            found: true,
+            lookupCode: "VACustSessionData",
+            lookupValue: normalizedAni,
+            returnValue1: buildSessionReturnValue1(entry.record),
+            parsed: entry.record,
+            age_seconds: ageSeconds,
+            within_10_min_window: withinWindow,
+            note: withinWindow
+              ? "Within 10-minute window — set TransferReason=Pay_Success_Return and resume routing using preserved ATT/AgencyTransferNumber (FR 6.5.3)."
+              : "Outside 10-minute window — treat as expired; route through standard flow.",
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
 
 // ============================================================
 // JSON-RPC HANDLER (mirrors farmers-insurance-mcp pattern)
@@ -372,7 +729,7 @@ async function handleJsonRpc(body) {
           result: {
             protocolVersion: params?.protocolVersion || "2025-03-26",
             capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "RADD Simulator", version: "0.1.0" },
+            serverInfo: { name: "RADD Simulator", version: "0.2.0" },
           },
           id,
         };
@@ -490,11 +847,15 @@ router.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     server: "RADD Simulator",
+    version: "0.2.0",
     tools: TOOL_SCHEMAS.length,
     fixtures: {
       agencies: Object.keys(AGENCIES).length,
       customers: Object.keys(CUSTOMERS).length,
+      destinations: Object.keys(DESTINATIONS).length,
+      session_records: SESSION_STORE.size,
     },
+    webex_available: getWebexAvailable(),
   });
 });
 
@@ -506,8 +867,8 @@ router.get("/", (_req, res) => {
   res.json({
     name: "RADD Simulator",
     description:
-      "Simulates the Farmers RADD (Routing And Data Distribution) web service for the Voice Advantage IVR Phase 2 demo. Provides agency and customer lookup MCP tools for the Webex AI Agent.",
-    version: "0.1.0",
+      "Simulates the Farmers RADD (Routing And Data Distribution) web service for the Voice Advantage IVR Phase 2 demo. Provides agency lookup, customer lookup, Webex availability, destination lookup, and Paymentus session-data preserve/retrieve MCP tools for the Webex AI Agent.",
+    version: "0.2.0",
     tools: TOOL_SCHEMAS.map((t) => t.name),
     health: "/radd/health",
     mcp_endpoint: "/radd/mcp",
@@ -515,7 +876,10 @@ router.get("/", (_req, res) => {
     demo_fixtures: {
       agencies: Object.keys(AGENCIES),
       customers: Object.keys(CUSTOMERS),
+      destinations: Object.keys(DESTINATIONS),
     },
+    webex_available: getWebexAvailable(),
+    session_window_seconds: SESSION_WINDOW_SECONDS,
   });
 });
 
