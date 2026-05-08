@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import jdsRouter from "./apps/jds-web-manager/router.js";
 import wxccRouter from "./apps/wxcc-config-mcp/router.js";
 import farmersRouter from "./apps/farmers-insurance-mcp/router.js";
+import raddRouter from "./apps/radd-sim/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +40,7 @@ const STATUS_APPS = [
   { prefix: "/jds", name: "jds-web-manager", healthPath: "/jds/auth/status" },
   { prefix: "/wxcc", name: "wxcc-config-mcp", healthPath: "/wxcc/health" },
   { prefix: "/farmers", name: "farmers-insurance-mcp", healthPath: "/farmers/health" },
+  { prefix: "/radd", name: "radd-sim", healthPath: "/radd/health" },
 ];
 
 app.use("/jds", jdsRouter);
@@ -49,6 +51,9 @@ MOUNTED.push({ prefix: "/wxcc", name: "wxcc-config-mcp" });
 
 app.use("/farmers", farmersRouter);
 MOUNTED.push({ prefix: "/farmers", name: "farmers-insurance-mcp" });
+
+app.use("/radd", raddRouter);
+MOUNTED.push({ prefix: "/radd", name: "radd-sim" });
 
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));
