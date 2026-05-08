@@ -10,6 +10,7 @@
  *   /jds/*        — jds-web-manager (Step 2 ✓)
  *   /wxcc/*       — wxcc-config-mcp (Step 3)
  *   /farmers/*    — farmers-insurance-mcp (Step 4)
+ *   /radd/*       — radd-mcp (Step 6)
  *   /health       — top-level health check
  */
 
@@ -21,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import jdsRouter from "./apps/jds-web-manager/router.js";
 import wxccRouter from "./apps/wxcc-config-mcp/router.js";
 import farmersRouter from "./apps/farmers-insurance-mcp/router.js";
+import raddMcp from "./apps/radd-mcp/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +41,7 @@ const STATUS_APPS = [
   { prefix: "/jds", name: "jds-web-manager", healthPath: "/jds/auth/status" },
   { prefix: "/wxcc", name: "wxcc-config-mcp", healthPath: "/wxcc/health" },
   { prefix: "/farmers", name: "farmers-insurance-mcp", healthPath: "/farmers/health" },
+  { prefix: "/radd", name: "radd-mcp", healthPath: "/radd/health" },
 ];
 
 app.use("/jds", jdsRouter);
@@ -49,6 +52,9 @@ MOUNTED.push({ prefix: "/wxcc", name: "wxcc-config-mcp" });
 
 app.use("/farmers", farmersRouter);
 MOUNTED.push({ prefix: "/farmers", name: "farmers-insurance-mcp" });
+
+app.use("/radd", raddMcp);
+MOUNTED.push({ prefix: "/radd", name: "radd-mcp" });
 
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));
@@ -91,7 +97,7 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "node-services-hub",
-    version: "0.8.0",
+    version: "0.9.0",
     mounted: MOUNTED,
     uptime_sec: Math.round(process.uptime()),
   });
