@@ -22,6 +22,9 @@ import jdsRouter from "./apps/jds-web-manager/router.js";
 import wxccRouter from "./apps/wxcc-config-mcp/router.js";
 import farmersRouter from "./apps/farmers-insurance-mcp/router.js";
 import raddRouter from "./apps/radd-sim/router.js";
+import paymentusRouter from "./apps/paymentus-sim/router.js";
+import claimsRouter from "./apps/claims-ivr-sim/router.js";
+import fsaRouter from "./apps/fsa-sim/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,6 +44,9 @@ const STATUS_APPS = [
   { prefix: "/wxcc", name: "wxcc-config-mcp", healthPath: "/wxcc/health" },
   { prefix: "/farmers", name: "farmers-insurance-mcp", healthPath: "/farmers/health" },
   { prefix: "/radd", name: "radd-sim", healthPath: "/radd/health" },
+  { prefix: "/paymentus", name: "paymentus-sim", healthPath: "/paymentus/health" },
+  { prefix: "/claims", name: "claims-ivr-sim", healthPath: "/claims/health" },
+  { prefix: "/fsa", name: "fsa-sim", healthPath: "/fsa/health" },
 ];
 
 app.use("/jds", jdsRouter);
@@ -54,6 +60,15 @@ MOUNTED.push({ prefix: "/farmers", name: "farmers-insurance-mcp" });
 
 app.use("/radd", raddRouter);
 MOUNTED.push({ prefix: "/radd", name: "radd-sim" });
+
+app.use("/paymentus", paymentusRouter);
+MOUNTED.push({ prefix: "/paymentus", name: "paymentus-sim" });
+
+app.use("/claims", claimsRouter);
+MOUNTED.push({ prefix: "/claims", name: "claims-ivr-sim" });
+
+app.use("/fsa", fsaRouter);
+MOUNTED.push({ prefix: "/fsa", name: "fsa-sim" });
 
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));
@@ -96,7 +111,7 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "node-services-hub",
-    version: "0.6.1",
+    version: "0.7.0",
     mounted: MOUNTED,
     uptime_sec: Math.round(process.uptime()),
   });
