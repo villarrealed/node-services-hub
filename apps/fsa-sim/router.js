@@ -199,7 +199,7 @@ function getQueueStatus(queueType) {
     estimated_wait_seconds: estimatedWait,
     csrs_available: csrsAvailable,
     csrs_total: queue.csrs_total,
-    sla_compliant,
+    sla_compliant: slaCompliant,
   };
 }
 
@@ -215,29 +215,29 @@ const TOOL_SCHEMAS = [
     inputSchema: {
       type: "object",
       properties: {
-        queue_type: {
+        queueType: {
           type: "string",
-          enum: ["VA_FSA_Destination", "VA_FSA_LicDestination"],
+          enum: ["licensed", "unlicensed", "VA_FSA_Destination", "VA_FSA_LicDestination"],
           description:
-            "Which FSA queue to route to. VA_FSA_Destination = Unlicensed CSRs (billing, documents). VA_FSA_LicDestination = Licensed CSRs (id_cards, payment_question, general service).",
+            "Which FSA queue to route to. 'licensed' or 'VA_FSA_LicDestination' = Licensed CSRs (id_cards, payment_question, general service). 'unlicensed' or 'VA_FSA_Destination' = Unlicensed CSRs (billing, documents).",
         },
-        ani: {
+        customerId: {
           type: "string",
           description:
-            "Caller's phone number (ANI). Used for customer history lookup and session tracking. Accepts any common format.",
+            "Customer identifier (phone number/ANI). Used for customer history lookup and session tracking. Accepts any common format.",
         },
-        intent: {
+        reason: {
           type: "string",
           description:
             "The customer's service intent (from the 11 Phase 2 intents). Examples: billing, documents, id_cards, payment_question, policy_change, add_driver, etc. Used for routing validation and logging.",
         },
-        policy_id: {
+        policyId: {
           type: "string",
           description:
             "Optional policy identifier. If provided, logged with the session for CSR context.",
         },
       },
-      required: ["queue_type", "ani", "intent"],
+      required: ["queueType", "customerId", "reason"],
     },
   },
   {
@@ -247,14 +247,14 @@ const TOOL_SCHEMAS = [
     inputSchema: {
       type: "object",
       properties: {
-        queue_type: {
+        queueType: {
           type: "string",
-          enum: ["VA_FSA_Destination", "VA_FSA_LicDestination"],
+          enum: ["licensed", "unlicensed", "VA_FSA_Destination", "VA_FSA_LicDestination"],
           description:
-            "Which FSA queue to check. VA_FSA_Destination = Unlicensed. VA_FSA_LicDestination = Licensed.",
+            "Which FSA queue to check. 'licensed' or 'VA_FSA_LicDestination' = Licensed. 'unlicensed' or 'VA_FSA_Destination' = Unlicensed.",
         },
       },
-      required: ["queue_type"],
+      required: ["queueType"],
     },
   },
   {
@@ -321,15 +321,20 @@ const TOOL_SCHEMAS = [
 // TOOL HANDLERS
 // ============================================================
 
-async function handleRouteToFsaQueue({ queue_type, ani, intent, policy_id }) {
-  const normalizedAni = normalizePhone(ani);
+async function handleRouteToFsaQueue({ queueType, customerId, reason, policyId }) {
+  // Normalize queueType: accept both shorthand ("licensed"/"unlicensed") and full names
+  let queue_type = queueType;
+  if (queueType === "licensed") queue_type = "VA_FSA_LicDestination";
+  if (queueType === "unlicensed") queue_type = "VA_FSA_Destination";
+
+  const normalizedAni = normalizePhone(customerId);
   if (!normalizedAni) {
     return {
       content: [
         {
           type: "text",
           text: JSON.stringify(
-            { success: false, message: "ani is required and must contain digits." },
+            { success: false, message: "customerId is required and must contain digits." },
             null,
             2,
           ),
@@ -347,7 +352,7 @@ async function handleRouteToFsaQueue({ queue_type, ani, intent, policy_id }) {
           text: JSON.stringify(
             {
               success: false,
-              message: `Unknown queue_type '${queue_type}'. Valid types: ${Object.keys(QUEUES).join(", ")}.`,
+              message: `Unknown queueType '${queueType}'. Valid types: licensed, unlicensed, VA_FSA_Destination, VA_FSA_LicDestination.`,
             },
             null,
             2,
@@ -364,8 +369,8 @@ async function handleRouteToFsaQueue({ queue_type, ani, intent, policy_id }) {
   SESSION_STORE.set(sessionId, {
     queue_type,
     ani: normalizedAni,
-    intent,
-    policy_id: policy_id || null,
+    intent: reason,
+    policy_id: policyId || null,
     created_at: new Date().toISOString(),
     csr_assigned: false,
   });
@@ -382,7 +387,7 @@ async function handleRouteToFsaQueue({ queue_type, ani, intent, policy_id }) {
             queue_position: queueStatus.callers_ahead + 1,
             estimated_wait_seconds: queueStatus.estimated_wait_seconds,
             csr_pool_size: queueStatus.csrs_total,
-            intent_acknowledged: intent,
+            intent_acknowledged: reason,
             message: `Routed to ${queueStatus.queue_label}. You are number ${queueStatus.callers_ahead + 1} in the queue. Estimated wait: ${Math.round(queueStatus.estimated_wait_seconds / 60)} minutes.`,
           },
           null,
@@ -393,7 +398,12 @@ async function handleRouteToFsaQueue({ queue_type, ani, intent, policy_id }) {
   };
 }
 
-async function handleGetQueueStatus({ queue_type }) {
+async function handleGetQueueStatus({ queueType }) {
+  // Normalize queueType: accept both shorthand ("licensed"/"unlicensed") and full names
+  let queue_type = queueType;
+  if (queueType === "licensed") queue_type = "VA_FSA_LicDestination";
+  if (queueType === "unlicensed") queue_type = "VA_FSA_Destination";
+
   const queueStatus = getQueueStatus(queue_type);
   if (!queueStatus) {
     return {
@@ -403,7 +413,7 @@ async function handleGetQueueStatus({ queue_type }) {
           text: JSON.stringify(
             {
               found: false,
-              message: `Unknown queue_type '${queue_type}'. Valid types: ${Object.keys(QUEUES).join(", ")}.`,
+              message: `Unknown queueType '${queueType}'. Valid types: licensed, unlicensed, VA_FSA_Destination, VA_FSA_LicDestination.`,
             },
             null,
             2,
