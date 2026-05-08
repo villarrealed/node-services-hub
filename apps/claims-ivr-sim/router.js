@@ -540,7 +540,7 @@ async function handleJsonRpc(body) {
           result: {
             protocolVersion: params?.protocolVersion || "2025-03-26",
             capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "Claims IVR Simulator", version: "0.1.0" },
+            serverInfo: { name: "Claims IVR Simulator", version: "0.1.1" },
           },
           id,
         };
@@ -704,8 +704,20 @@ router.post("/mcp", async (req, res) => {
   return res.json(await handleJsonRpc(body));
 });
 
-router.get("/mcp", (_req, res) => {
-  res.status(405).json({ error: "Method not allowed. Use POST for MCP requests." });
+router.get("/mcp", (req, res) => {
+  // Streamable HTTP transport: open SSE stream for server→client messages.
+  // We have no server-initiated messages to push, so stream stays idle with keepalives.
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write(": connected\n\n");
+  const keepalive = setInterval(() => {
+    try { res.write(": keepalive\n\n"); } catch { /* socket closed */ }
+  }, 15000);
+  req.on("close", () => clearInterval(keepalive));
 });
 
 router.delete("/mcp", (_req, res) => {
