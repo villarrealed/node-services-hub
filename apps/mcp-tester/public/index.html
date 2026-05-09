@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Tester</title>
+  <meta name="description" content="Interactive MCP testing UI for node-services-hub">
+  <style>
+    :root {
+      --bg: #0a1526;
+      --bg-soft: #0e1c31;
+      --panel: #0a1526;
+      --panel-border: rgba(124, 232, 255, 0.15);
+      --text: #f4f8fb;
+      --muted: #9eb3c7;
+      --blue: #1ba0d7;
+      --blue-strong: #00bceb;
+      --cyan: #7ce8ff;
+      --green: #2fdc8c;
+      --yellow: #ffd93d;
+      --red: #ff6b81;
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      --radius: 12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--sans);
+      color: var(--text);
+      background: linear-gradient(180deg, #0a1526 0%, #07111f 100%);
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 2.5rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, var(--cyan), var(--blue-strong));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--bg-soft);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin: 0 0 16px;
+      font-size: 1.3rem;
+      color: var(--cyan);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    select, input, button {
+      font-family: var(--sans);
+      font-size: 0.95rem;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+
+    button {
+      padding: 10px 20px;
+      background: linear-gradient(90deg, var(--blue), var(--blue-strong));
+      border: none;
+      border-radius: 6px;
+      color: #03111d;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.2s, transform 0.1s;
+    }
+
+    button:hover {
+      filter: brightness(1.1);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-badge.disconnected {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+    }
+
+    .status-badge.connecting {
+      background: rgba(255, 217, 61, 0.15);
+      color: var(--yellow);
+    }
+
+    .status-badge.connected {
+      background: rgba(47, 220, 140, 0.15);
+      color: var(--green);
+    }
+
+    .status-badge.error {
+      background: rgba(255, 107, 129, 0.15);
+      color: var(--red);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .connection-info {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: var(--mono);
+    }
+
+    .connection-info div {
+      margin-bottom: 6px;
+    }
+
+    .connection-info div:last-child {
+      margin-bottom: 0;
+    }
+
+    .connection-info strong {
+      color: var(--cyan);
+    }
+
+    .tools-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .tool-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .tool-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.1rem;
+      color: var(--blue-strong);
+    }
+
+    .tool-card p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .tool-form {
+      margin-bottom: 16px;
+    }
+
+    .tool-result {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      border-left: 3px solid var(--blue);
+    }
+
+    .tool-result h4 {
+      margin: 0 0 8px;
+      font-size: 0.9rem;
+      color: var(--cyan);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .tool-result h4::before {
+      content: "▼ ";
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+
+    .tool-result h4.collapsed::before {
+      transform: rotate(-90deg);
+    }
+
+    .tool-result pre {
+      margin: 0;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .tool-result .pretty {
+      margin-top: 12px;
+      padding: 12px;
+      background: rgba(47, 220, 140, 0.05);
+      border-radius: 4px;
+      border-left: 3px solid var(--green);
+    }
+
+    .tool-result .pretty h5 {
+      margin: 0 0 8px;
+      font-size: 0.85rem;
+      color: var(--green);
+    }
+
+    .activity-log {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-soft);
+      border-top: 2px solid var(--panel-border);
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+    }
+
+    .activity-log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .activity-log-header h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--cyan);
+    }
+
+    .activity-log-toggle {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .activity-log-content {
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 0 20px 20px;
+    }
+
+    .activity-log-content.collapsed {
+      display: none;
+    }
+
+    .log-entry {
+      margin-bottom: 12px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+
+    .log-entry.request {
+      border-left: 3px solid var(--blue);
+    }
+
+    .log-entry.response {
+      border-left: 3px solid var(--green);
+    }
+
+    .log-entry.error {
+      border-left: 3px solid var(--red);
+    }
+
+    .log-entry-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 6px;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .log-entry-time {
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .log-entry-body {
+      color: var(--muted);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .required::after {
+      content: " *";
+      color: var(--red);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>MCP Tester</h1>
+      <p class="subtitle">Full streamable HTTP transport (2025-03-26)</p>
+    </header>
+
+    <div class="layout">
+      <!-- Left column: Server selection and connection -->
+      <div>
+        <div class="panel">
+          <h2>Server Selection</h2>
+          <div class="form-group">
+            <label for="server-select">MCP Server</label>
+            <select id="server-select">
+              <option value="">Loading servers...</option>
+            </select>
+          </div>
+          <button id="connect-btn" disabled>Connect</button>
+          <button id="disconnect-btn" class="secondary hidden">Disconnect</button>
+        </div>
+
+        <div class="panel" style="margin-top: 24px;">
+          <h2>Connection Status</h2>
+          <div id="status-display">
+            <span class="status-badge disconnected">
+              <span class="status-dot"></span>
+              Disconnected
+            </span>
+          </div>
+          <div id="connection-info" class="connection-info hidden"></div>
+        </div>
+      </div>
+
+      <!-- Right column: Tools -->
+      <div>
+        <div class="panel">
+          <h2>Tools</h2>
+          <div id="tools-container">
+            <p style="color: var(--muted);">Connect to a server to see available tools.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity log -->
+  <div class="activity-log">
+    <div class="activity-log-header" id="log-toggle">
+      <h3>Activity Log</h3>
+      <span class="activity-log-toggle">Click to expand/collapse</span>
+    </div>
+    <div class="activity-log-content" id="log-content"></div>
+  </div>
+
+  <script>
+    // State
+    let state = {
+      servers: [],
+      selectedServer: null,
+      sessionId: null,
+      connected: false,
+      tools: [],
+    };
+
+    // DOM elements
+    const serverSelect = document.getElementById('server-select');
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const statusDisplay = document.getElementById('status-display');
+    const connectionInfo = document.getElementById('connection-info');
+    const toolsContainer = document.getElementById('tools-container');
+    const logContent = document.getElementById('log-content');
+    const logToggle = document.getElementById('log-toggle');
+
+    // Activity log
+    let logCollapsed = false;
+    logToggle.addEventListener('click', () => {
+      logCollapsed = !logCollapsed;
+      logContent.classList.toggle('collapsed', logCollapsed);
+    });
+
+    function logActivity(type, method, url, status, body, response) {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      
+      const timestamp = new Date().toLocaleTimeString();
+      const header = document.createElement('div');
+      header.className = 'log-entry-header';
+      header.innerHTML = `
+        <span>${type.toUpperCase()}</span>
+        <span>${method} ${url}</span>
+        ${status ? `<span>HTTP ${status}</span>` : ''}
+        <span class="log-entry-time">${timestamp}</span>
+      `;
+      
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'log-entry-body';
+      if (body) {
+        bodyDiv.textContent = `Request: ${JSON.stringify(body, null, 2)}`;
+      }
+      if (response) {
+        if (body) bodyDiv.textContent += '\n\n';
+        bodyDiv.textContent += `Response: ${JSON.stringify(response, null, 2).substring(0, 500)}${JSON.stringify(response).length > 500 ? '...' : ''}`;
+      }
+      
+      entry.appendChild(header);
+      entry.appendChild(bodyDiv);
+      logContent.insertBefore(entry, logContent.firstChild);
+      
+      // Keep only last 50 entries
+      while (logContent.children.length > 50) {
+        logContent.removeChild(logContent.lastChild);
+      }
+    }
+
+    // Load servers
+    async function loadServers() {
+      try {
+        const res = await fetch('./servers');
+        const servers = await res.json();
+        state.servers = servers;
+        
+        serverSelect.innerHTML = '<option value="">Select a server...</option>';
+        servers.forEach(server => {
+          const option = document.createElement('option');
+          option.value = server.id;
+          option.textContent = `${server.name} — ${server.description}`;
+          option.dataset.url = server.url;
+          serverSelect.appendChild(option);
+        });
+        
+        connectBtn.disabled = false;
+      } catch (err) {
+        serverSelect.innerHTML = '<option value="">Error loading servers</option>';
+        logActivity('error', 'GET', './servers', null, null, { error: err.message });
+      }
+    }
+
+    // Update status display
+    function updateStatus(status, message) {
+      const badges = {
+        disconnected: '<span class="status-badge disconnected"><span class="status-dot"></span>Disconnected</span>',
+        connecting: '<span class="status-badge connecting"><span class="status-dot"></span>Connecting</span>',
+        connected: '<span class="status-badge connected"><span class="status-dot"></span>Connected</span>',
+        error: '<span class="status-badge error"><span class="status-dot"></span>Error</span>',
+      };
+      statusDisplay.innerHTML = badges[status] || badges.disconnected;
+      if (message) {
+        statusDisplay.innerHTML += `<p style="margin-top: 8px; color: var(--muted); font-size: 0.9rem;">${message}</p>`;
+      }
+    }
+
+    // Parse SSE or JSON response
+    function parseResponse(text, contentType) {
+      if (contentType && contentType.includes('text/event-stream')) {
+        // Parse SSE frame: event: message\ndata: <json>\n\n
+        const match = text.match(/data:\s*({.*})/s);
+        if (match) {
+          return JSON.parse(match[1]);
+        }
+      }
+      return JSON.parse(text);
+    }
+
+    // Connect to server
+    async function connect() {
+      const selectedOption = serverSelect.options[serverSelect.selectedIndex];
+      if (!selectedOption || !selectedOption.value) return;
+      
+      const serverUrl = selectedOption.dataset.url;
+      state.selectedServer = { url: serverUrl, name: selectedOption.textContent };
+      
+      updateStatus('connecting', 'Initializing...');
+      connectBtn.disabled = true;
+      
+      try {
+        const body = {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'mcp-tester', version: '1.0.0' },
+          },
+        };
+        
+        logActivity('request', 'POST', serverUrl, null, body, null);
+        
+        const res = await fetch(serverUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream',
+          },
+          body: JSON.stringify(body),
+        });
+        
+        const sessionId = res.headers.get('Mcp-Session-Id');
+        const contentType = res.headers.get('Content-Type');
+        const text = await res.text();
+        const data = parseResponse(text, contentType);
+        
+        logActivity('response', 'POST', serverUrl, res.status, null, data);
+        
+        if (!res.ok || data.error) {
+          throw new Error(data.error?.message || 'Initialize failed');
+        }
+        
+        state.sessionId = sessionId;
+        state.connected = true;
+        
+        // Display connection info
+        const result = data.result;
+        connectionInfo.innerHTML = `
+          <div><strong>Protocol:</strong> ${result.protocolVersion}</div>
+          <div><strong>Server:</strong> ${result.serverInfo.name} v${result.serverInfo.version}</div>
+          <div><strong>Session ID:</strong> ${sessionId || '(none)'}</div>
+          <div><strong>Capabilities:</strong> ${JSON.stringify(result.capabilities)}</div>
+        `;
+        connectionInfo.classList.remove('hidden');
+        
+        updateStatus('connected', `Connected to ${state.selectedServer.name}`);
+        connectBtn.classList.add('hidden');
+        disconnectBtn.classList.remove('hidden');
+        
+        // Load tools
+        await loadTools();
+        
+      } catch (err) {
+        updateStatus('error', err.message);
+        connectBtn.disabled = false;
+        logActivity('error', 'POST', serverUrl, null, null, { error: err.message });
+      }
+    }
+
+    // Load tools
+    async function loadTools() {
+      try {
+        const body = {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/list',
+        };
+        
+        const headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+        };
+        if (state.sessionId) {
+          headers['Mcp-Session-Id'] = state.sessionId;
+        }
+        
+        logActivity('request', 'POST', state.selectedServer.url, null, body, null);
+        
+        const res = await fetch(state.selectedServer.url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+        
+        const contentType = res.headers.get('Content-Type');
+        const text = await res.text();
+        const data = parseResponse(text, contentType);
+        
+        logActivity('response', 'POST', state.selectedServer.url, res.status, null, data);
+        
+        if (!res.ok || data.error) {
+          throw new Error(data.error?.message || 'tools/list failed');
+        }
+        
+        state.tools = data.result.tools || [];
+        renderTools();
+        
+      } catch (err) {
+        toolsContainer.innerHTML = `<p style="color: var(--red);">Error loading tools: ${err.message}</p>`;
+        logActivity('error', 'POST', state.selectedServer.url, null, null, { error: err.message });
+      }
+    }
+
+    // Render tools
+    function renderTools() {
+      if (state.tools.length === 0) {
+        toolsContainer.innerHTML = '<p style="color: var(--muted);">No tools available.</p>';
+        return;
+      }
+      
+      toolsContainer.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'tools-grid';
+      
+      state.tools.forEach((tool, index) => {
+        const card = document.createElement('div');
+        card.className = 'tool-card';
+        
+        const title = document.createElement('h3');
+        title.textContent = tool.name;
+        
+        const desc = document.createElement('p');
+        desc.textContent = tool.description;
+        
+        const form = document.createElement('form');
+        form.className = 'tool-form';
+        form.id = `tool-form-${index}`;
+        
+        const schema = tool.inputSchema;
+        if (schema && schema.properties) {
+          Object.entries(schema.properties).forEach(([key, prop]) => {
+            const group = document.createElement('div');
+            group.className = 'form-group';
+            
+            const label = document.createElement('label');
+            label.textContent = prop.description || key;
+            label.htmlFor = `tool-${index}-${key}`;
+            if (schema.required && schema.required.includes(key)) {
+              label.className = 'required';
+            }
+            
+            let input;
+            if (prop.enum) {
+              input = document.createElement('select');
+              prop.enum.forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                input.appendChild(opt);
+              });
+            } else if (prop.type === 'boolean') {
+              input = document.createElement('select');
+              ['true', 'false'].forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                input.appendChild(opt);
+              });
+            } else if (prop.type === 'number' || prop.type === 'integer') {
+              input = document.createElement('input');
+              input.type = 'number';
+            } else {
+              input = document.createElement('input');
+              input.type = 'text';
+            }
+            
+            input.id = `tool-${index}-${key}`;
+            input.name = key;
+            input.dataset.type = prop.type;
+            input.dataset.required = schema.required && schema.required.includes(key) ? 'true' : 'false';
+            
+            group.appendChild(label);
+            group.appendChild(input);
+            form.appendChild(group);
+          });
+        }
+        
+        const callBtn = document.createElement('button');
+        callBtn.type = 'submit';
+        callBtn.textContent = 'Call';
+        form.appendChild(callBtn);
+        
+        const resultDiv = document.createElement('div');
+        resultDiv.id = `tool-result-${index}`;
+        
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await callTool(tool.name, form, resultDiv);
+        });
+        
+        card.appendChild(title);
+        card.appendChild(desc);
+        card.appendChild(form);
+        card.appendChild(resultDiv);
+        grid.appendChild(card);
+      });
+      
+      toolsContainer.appendChild(grid);
+    }
+
+    // Call tool
+    async function callTool(toolName, form, resultDiv) {
+      const formData = new FormData(form);
+      const args = {};
+      
+      for (const [key, value] of formData.entries()) {
+        const input = form.elements[key];
+        const type = input.dataset.type;
+        const required = input.dataset.required === 'true';
+        
+        if (!value && !required) continue; // Skip empty optional fields
+        
+        if (type === 'number' || type === 'integer') {
+          args[key] = Number(value);
+        } else if (type === 'boolean') {
+          args[key] = value === 'true';
+        } else {
+          args[key] = value;
+        }
+      }
+      
+      try {
+        const body = {
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: {
+            name: toolName,
+            arguments: args,
+          },
+        };
+        
+        const headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+        };
+        if (state.sessionId) {
+          headers['Mcp-Session-Id'] = state.sessionId;
+        }
+        
+        logActivity('request', 'POST', state.selectedServer.url, null, body, null);
+        
+        const res = await fetch(state.selectedServer.url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+        
+        const contentType = res.headers.get('Content-Type');
+        const text = await res.text();
+        const data = parseResponse(text, contentType);
+        
+        logActivity('response', 'POST', state.selectedServer.url, res.status, null, data);
+        
+        // Display result
+        resultDiv.innerHTML = '';
+        resultDiv.className = 'tool-result';
+        
+        const rawHeader = document.createElement('h4');
+        rawHeader.textContent = 'Raw JSON-RPC Response';
+        rawHeader.addEventListener('click', () => {
+          rawHeader.classList.toggle('collapsed');
+          rawPre.classList.toggle('hidden');
+        });
+        
+        const rawPre = document.createElement('pre');
+        rawPre.textContent = JSON.stringify(data, null, 2);
+        
+        resultDiv.appendChild(rawHeader);
+        resultDiv.appendChild(rawPre);
+        
+        // Pretty view
+        if (data.result && data.result.content && data.result.content[0] && data.result.content[0].text) {
+          const textContent = data.result.content[0].text;
+          try {
+            const parsed = JSON.parse(textContent);
+            const prettyDiv = document.createElement('div');
+            prettyDiv.className = 'pretty';
+            
+            const prettyHeader = document.createElement('h5');
+            prettyHeader.textContent = 'Parsed Content';
+            
+            const prettyPre = document.createElement('pre');
+            prettyPre.textContent = JSON.stringify(parsed, null, 2);
+            
+            prettyDiv.appendChild(prettyHeader);
+            prettyDiv.appendChild(prettyPre);
+            resultDiv.appendChild(prettyDiv);
+          } catch (e) {
+            // Not JSON, just display as text
+            const prettyDiv = document.createElement('div');
+            prettyDiv.className = 'pretty';
+            
+            const prettyHeader = document.createElement('h5');
+            prettyHeader.textContent = 'Content';
+            
+            const prettyPre = document.createElement('pre');
+            prettyPre.textContent = textContent;
+            
+            prettyDiv.appendChild(prettyHeader);
+            prettyDiv.appendChild(prettyPre);
+            resultDiv.appendChild(prettyDiv);
+          }
+        }
+        
+      } catch (err) {
+        resultDiv.innerHTML = `<div class="tool-result"><p style="color: var(--red);">Error: ${err.message}</p></div>`;
+        logActivity('error', 'POST', state.selectedServer.url, null, null, { error: err.message });
+      }
+    }
+
+    // Disconnect
+    async function disconnect() {
+      if (!state.connected) return;
+      
+      try {
+        const headers = {};
+        if (state.sessionId) {
+          headers['Mcp-Session-Id'] = state.sessionId;
+        }
+        
+        logActivity('request', 'DELETE', state.selectedServer.url, null, null, null);
+        
+        await fetch(state.selectedServer.url, {
+          method: 'DELETE',
+          headers,
+        });
+        
+        logActivity('response', 'DELETE', state.selectedServer.url, 200, null, { message: 'Session closed' });
+        
+      } catch (err) {
+        logActivity('error', 'DELETE', state.selectedServer.url, null, null, { error: err.message });
+      } finally {
+        state.connected = false;
+        state.sessionId = null;
+        state.tools = [];
+        
+        updateStatus('disconnected');
+        connectionInfo.classList.add('hidden');
+        toolsContainer.innerHTML = '<p style="color: var(--muted);">Connect to a server to see available tools.</p>';
+        
+        connectBtn.classList.remove('hidden');
+        connectBtn.disabled = false;
+        disconnectBtn.classList.add('hidden');
+      }
+    }
+
+    // Event listeners
+    connectBtn.addEventListener('click', connect);
+    disconnectBtn.addEventListener('click', disconnect);
+
+    // Initialize
+    loadServers();
+  </script>
+</body>
+</html>
