@@ -12,9 +12,10 @@ Render charges $7/mo per always-on Node service. Running N services on N paid pl
 node-services-hub.onrender.com
 ├── /              → landing page (per-app links)
 ├── /health        → hub health check
-├── /jds/*         → jds-web-manager       (planned, Step 2)
-├── /wxcc/*        → wxcc-config-mcp       (planned, Step 3)
-└── /farmers/*     → farmers-insurance-mcp (planned, Step 4)
+├── /jds/*         → jds-web-manager
+├── /wxcc/*        → wxcc-config-mcp
+├── /farmers/*     → farmers-insurance-mcp
+└── /radd/*        → radd-mcp (Farmers RADD routing lookups)
 ```
 
 Each sub-app is vendored under `apps/<name>/` and exports an Express `Router` instead of calling `app.listen()` itself. The top-level `server.js` does the listening and `app.use("/<prefix>", subRouter)`.
@@ -31,12 +32,13 @@ npm run dev       # auto-reload on file changes
 
 | Step | Status | Description |
 |---|---|---|
-| 1 | ✅ | Repo scaffold (this commit) |
-| 2 | ⏳ | Mount jds-web-manager at `/jds` |
-| 3 | ⏳ | Mount wxcc-config-mcp at `/wxcc` |
-| 4 | ⏳ | Mount farmers-insurance-mcp at `/farmers` |
-| 5 | ⏳ | Landing page with per-app status |
-| 6 | ⏳ | `render.yaml` + deploy on paid Starter plan |
+| 1 | ✅ | Repo scaffold |
+| 2 | ✅ | Mount jds-web-manager at `/jds` |
+| 3 | ✅ | Mount wxcc-config-mcp at `/wxcc` |
+| 4 | ✅ | Mount farmers-insurance-mcp at `/farmers` |
+| 5 | ✅ | Mount radd-mcp at `/radd` (Farmers Voice Advantage IVR routing lookups) |
+| 6 | ✅ | Landing page with per-app status |
+| 7 | ✅ | `render.yaml` + deploy on paid Starter plan |
 
 ## Vendoring policy
 
@@ -81,6 +83,8 @@ Sub-apps are **copied** into `apps/`, not linked via submodules. The original re
 | `UPSTASH_REDIS_REST_TOKEN` | ⚠️ | Same as above | Required if `UPSTASH_REDIS_REST_URL` is set |
 | **Farmers Insurance MCP** | | | |
 | _(none)_ | — | — | All data is hardcoded for demo purposes |
+| **RADD MCP** | | | |
+| _(none)_ | — | — | All data is hardcoded for demo purposes (Farmers Voice Advantage IVR) |
 
 ### Critical post-deploy step: Update OAuth callback URLs
 
@@ -120,6 +124,12 @@ curl https://node-services-hub.onrender.com/wxcc/health
 # Farmers Insurance MCP
 curl https://node-services-hub.onrender.com/farmers/
 curl https://node-services-hub.onrender.com/farmers/health
+
+# RADD MCP (Farmers Voice Advantage IVR routing lookups)
+curl https://node-services-hub.onrender.com/radd/health
+curl -X POST https://node-services-hub.onrender.com/radd/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 Expected results:
