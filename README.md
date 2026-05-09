@@ -15,7 +15,8 @@ node-services-hub.onrender.com
 ├── /jds/*         → jds-web-manager
 ├── /wxcc/*        → wxcc-config-mcp
 ├── /farmers/*     → farmers-insurance-mcp
-└── /radd/*        → radd-mcp (Farmers RADD routing lookups)
+├── /radd/*        → radd-mcp (Farmers RADD routing lookups)
+└── /tester/*      → mcp-tester (Interactive MCP testing UI)
 ```
 
 Each sub-app is vendored under `apps/<name>/` and exports an Express `Router` instead of calling `app.listen()` itself. The top-level `server.js` does the listening and `app.use("/<prefix>", subRouter)`.
@@ -39,6 +40,7 @@ npm run dev       # auto-reload on file changes
 | 5 | ✅ | Mount radd-mcp at `/radd` (Farmers Voice Advantage IVR routing lookups) |
 | 6 | ✅ | Landing page with per-app status |
 | 7 | ✅ | `render.yaml` + deploy on paid Starter plan |
+| 8 | ✅ | Mount mcp-tester at `/tester` (Interactive MCP testing UI) |
 
 ## Vendoring policy
 
@@ -85,6 +87,8 @@ Sub-apps are **copied** into `apps/`, not linked via submodules. The original re
 | _(none)_ | — | — | All data is hardcoded for demo purposes |
 | **RADD MCP** | | | |
 | _(none)_ | — | — | All data is hardcoded for demo purposes (Farmers Voice Advantage IVR) |
+| **MCP Tester** | | | |
+| _(none)_ | — | — | Static UI for testing MCP servers on this hub |
 
 ### Critical post-deploy step: Update OAuth callback URLs
 
@@ -130,6 +134,10 @@ curl https://node-services-hub.onrender.com/radd/health
 curl -X POST https://node-services-hub.onrender.com/radd/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# MCP Tester (Interactive MCP testing UI)
+curl https://node-services-hub.onrender.com/tester/health
+curl https://node-services-hub.onrender.com/tester/servers
 ```
 
 Expected results:

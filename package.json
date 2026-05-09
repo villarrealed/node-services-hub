@@ -1,6 +1,6 @@
 {
   "name": "node-services-hub",
-  "version": "0.6.1",
+  "version": "0.10.0",
   "description": "Multi-app Express hub: consolidates multiple Node services under one Render plan to avoid free-tier spin-down.",
   "main": "server.js",
   "type": "module",
