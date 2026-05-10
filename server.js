@@ -26,6 +26,7 @@ import farmersRouter from "./apps/farmers-insurance-mcp/router.js";
 import raddMcp from "./apps/radd-mcp/router.js";
 import testerRouter from "./apps/mcp-tester/router.js";
 import farmersVaRouter from "./apps/farmers-va/router.js";
+import farmersVaMcpRouter from "./apps/farmers-va-mcp/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,6 +48,7 @@ const STATUS_APPS = [
   { prefix: "/radd", name: "radd-mcp", healthPath: "/radd/health" },
   { prefix: "/tester", name: "mcp-tester", healthPath: "/tester/health" },
   { prefix: "/farmers-va", name: "farmers-va", healthPath: "/farmers-va/health" },
+  { prefix: "/farmers-va-mcp", name: "farmers-va-mcp", healthPath: "/farmers-va-mcp/health" },
 ];
 
 app.use("/jds", jdsRouter);
@@ -66,6 +68,9 @@ MOUNTED.push({ prefix: "/tester", name: "mcp-tester" });
 
 app.use("/farmers-va", farmersVaRouter);
 MOUNTED.push({ prefix: "/farmers-va", name: "farmers-va" });
+
+app.use("/farmers-va-mcp", farmersVaMcpRouter);
+MOUNTED.push({ prefix: "/farmers-va-mcp", name: "farmers-va-mcp" });
 
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));
