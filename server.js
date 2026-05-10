@@ -25,6 +25,7 @@ import wxccRouter from "./apps/wxcc-config-mcp/router.js";
 import farmersRouter from "./apps/farmers-insurance-mcp/router.js";
 import raddMcp from "./apps/radd-mcp/router.js";
 import testerRouter from "./apps/mcp-tester/router.js";
+import farmersVaRouter from "./apps/farmers-va/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,6 +46,7 @@ const STATUS_APPS = [
   { prefix: "/farmers", name: "farmers-insurance-mcp", healthPath: "/farmers/health" },
   { prefix: "/radd", name: "radd-mcp", healthPath: "/radd/health" },
   { prefix: "/tester", name: "mcp-tester", healthPath: "/tester/health" },
+  { prefix: "/farmers-va", name: "farmers-va", healthPath: "/farmers-va/health" },
 ];
 
 app.use("/jds", jdsRouter);
@@ -61,6 +63,9 @@ MOUNTED.push({ prefix: "/radd", name: "radd-mcp" });
 
 app.use("/tester", testerRouter);
 MOUNTED.push({ prefix: "/tester", name: "mcp-tester" });
+
+app.use("/farmers-va", farmersVaRouter);
+MOUNTED.push({ prefix: "/farmers-va", name: "farmers-va" });
 
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));
