@@ -7,12 +7,66 @@ import { z } from 'zod';
 import sf from '../lib/salesforce-client.js';
 import { esc, digitsOnly, phoneLikePattern, toContact } from '../lib/helpers.js';
 
+// ============================================================
+// OUTPUT SCHEMAS
+// ============================================================
+
+const ContactRecordSchema = z.object({
+  id: z.string(),
+  first_name: z.string(),
+  last_name: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  mobile_phone: z.string(),
+  title: z.string(),
+  department: z.string(),
+  account_name: z.string(),
+  mailing_city: z.string(),
+  mailing_state: z.string(),
+  mailing_street: z.string(),
+  mailing_postal_code: z.string(),
+  created_date: z.string(),
+});
+
+const ContactSearchResultSchema = z.object({
+  count: z.number(),
+  records: z.array(ContactRecordSchema),
+});
+
+const VerifyIdentityResultSchema = z.object({
+  verified: z.boolean(),
+  match_confidence: z.enum(['exact', 'partial', 'mismatch', 'none']),
+  contact_found: z.boolean(),
+  contact: ContactRecordSchema.nullable(),
+  reason: z.string(),
+});
+
+const CreateContactSuccessSchema = z.object({
+  success: z.literal(true),
+  contact_id: z.string(),
+  first_name: z.string(),
+  last_name: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  account_id: z.string(),
+});
+
+const CreateContactFailureSchema = z.object({
+  success: z.literal(false),
+  errors: z.array(z.string()),
+  first_name: z.string(),
+  last_name: z.string(),
+});
+
+const CreateContactResultSchema = z.union([CreateContactSuccessSchema, CreateContactFailureSchema]);
+
 export const contactTools = {
   search_contacts: {
     schema: z.object({
       query: z.string().describe('Search term to match against contact name, email, or phone'),
       limit: z.number().default(10).describe('Maximum number of results (default 10, max 50)'),
     }),
+    outputSchema: ContactSearchResultSchema,
     handler: async ({ query, limit = 10 }) => {
       limit = Math.min(Math.max(limit, 1), 50);
       const soql = 
@@ -40,6 +94,7 @@ export const contactTools = {
       phone: z.string().describe('Phone number in any format — digits, dashes, dots, parens, spaces, country code all accepted'),
       limit: z.number().default(10).describe('Maximum number of results (default 10, max 50)'),
     }),
+    outputSchema: ContactSearchResultSchema,
     handler: async ({ phone, limit = 10 }) => {
       limit = Math.min(Math.max(limit, 1), 50);
       const digits = digitsOnly(phone);
@@ -73,6 +128,7 @@ export const contactTools = {
     schema: z.object({
       contact_id: z.string().describe('The 15- or 18-character Salesforce Contact ID'),
     }),
+    outputSchema: ContactRecordSchema,
     handler: async ({ contact_id }) => {
       const r = await sf.getRecord('Contact', contact_id);
       return toContact(r);
@@ -84,6 +140,7 @@ export const contactTools = {
       phone: z.string().describe("Caller's phone number (ANI) in any format"),
       claimed_name: z.string().describe("The name the caller stated — full name preferred, partial OK"),
     }),
+    outputSchema: VerifyIdentityResultSchema,
     handler: async ({ phone, claimed_name }) => {
       const digits = digitsOnly(phone);
       if (digits.length < 7) {
@@ -175,6 +232,7 @@ export const contactTools = {
       description: z.string().default('').describe('Contact description/notes'),
       account_id: z.string().default('').describe('Salesforce Account ID to link to this contact'),
     }),
+    outputSchema: CreateContactResultSchema,
     handler: async ({ first_name = '', last_name, email = '', phone = '', mobile_phone = '', title = '', department = '', mailing_city = '', mailing_state = '', mailing_street = '', mailing_postal_code = '', description = '', account_id = '' }) => {
       // Build payload — only include non-empty values
       const payload = {

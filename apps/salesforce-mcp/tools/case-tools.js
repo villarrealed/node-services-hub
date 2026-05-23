@@ -7,6 +7,53 @@ import { z } from 'zod';
 import sf from '../lib/salesforce-client.js';
 import { esc, toCase, s } from '../lib/helpers.js';
 
+// ============================================================
+// OUTPUT SCHEMAS
+// ============================================================
+
+const CaseRecordSchema = z.object({
+  id: z.string(),
+  case_number: z.string(),
+  subject: z.string(),
+  status: z.string(),
+  priority: z.string(),
+  case_type: z.string(),
+  origin: z.string(),
+  description: z.string(),
+  contact_name: z.string(),
+  account_name: z.string(),
+  owner_name: z.string(),
+  created_date: z.string(),
+  closed_date: z.string(),
+});
+
+const CaseSearchResultSchema = z.object({
+  count: z.number(),
+  records: z.array(CaseRecordSchema),
+});
+
+const CreateCaseSuccessSchema = z.object({
+  success: z.literal(true),
+  case_id: z.string(),
+  case_number: z.string(),
+  subject: z.string(),
+  status: z.string(),
+  priority: z.string(),
+  errors: z.array(z.string()),
+});
+
+const CreateCaseFailureSchema = z.object({
+  success: z.literal(false),
+  case_id: z.string(),
+  case_number: z.string(),
+  subject: z.string(),
+  status: z.string(),
+  priority: z.string(),
+  errors: z.array(z.string()),
+});
+
+const CreateCaseResultSchema = z.union([CreateCaseSuccessSchema, CreateCaseFailureSchema]);
+
 export const caseTools = {
   search_cases: {
     schema: z.object({
@@ -15,6 +62,7 @@ export const caseTools = {
       priority: z.string().default('').describe('Filter by priority (e.g. High, Medium, Low)'),
       limit: z.number().default(10).describe('Maximum number of results (default 10, max 50)'),
     }),
+    outputSchema: CaseSearchResultSchema,
     handler: async ({ query = '', status = '', priority = '', limit = 10 }) => {
       limit = Math.min(Math.max(limit, 1), 50);
       const conditions = [];
@@ -48,6 +96,7 @@ export const caseTools = {
     schema: z.object({
       case_id: z.string().describe('The Salesforce Case record ID or case number (e.g. 00001234)'),
     }),
+    outputSchema: CaseRecordSchema,
     handler: async ({ case_id }) => {
       // If case_id is all digits or short non-500 prefix, do CaseNumber→Id lookup first
       if (/^\d+$/.test(case_id) || (case_id.length <= 10 && !case_id.startsWith('500'))) {
@@ -91,6 +140,7 @@ export const caseTools = {
       contact_id: z.string().default('').describe('Salesforce Contact ID to link to this case'),
       account_id: z.string().default('').describe('Salesforce Account ID to link to this case'),
     }),
+    outputSchema: CreateCaseResultSchema,
     handler: async ({ subject, description = '', priority = 'Medium', status = 'New', origin = 'Web', case_type = '', contact_id = '', account_id = '' }) => {
       const payload = {
         Subject: subject,

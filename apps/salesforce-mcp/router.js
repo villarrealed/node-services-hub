@@ -54,11 +54,21 @@ const toolDescriptions = {
 };
 
 // Convert zod schemas to JSON Schema for MCP
-const TOOL_SCHEMAS = Object.keys(allTools).map((name) => ({
-  name,
-  description: toolDescriptions[name],
-  inputSchema: zodToJsonSchema(allTools[name].schema),
-}));
+const TOOL_SCHEMAS = Object.keys(allTools).map((name) => {
+  const tool = allTools[name];
+  const schema = {
+    name,
+    description: toolDescriptions[name],
+    inputSchema: zodToJsonSchema(tool.schema),
+  };
+  
+  // Include outputSchema if defined
+  if (tool.outputSchema) {
+    schema.outputSchema = zodToJsonSchema(tool.outputSchema);
+  }
+  
+  return schema;
+});
 
 // ============================================================
 // TOOL HANDLERS
@@ -77,7 +87,7 @@ async function handleToolCall(toolName, toolArgs) {
     // Execute handler
     const result = await tool.handler(validated);
     
-    return {
+    const response = {
       content: [
         {
           type: 'text',
@@ -85,6 +95,13 @@ async function handleToolCall(toolName, toolArgs) {
         },
       ],
     };
+    
+    // Include structuredContent if outputSchema is defined
+    if (tool.outputSchema) {
+      response.structuredContent = result;
+    }
+    
+    return response;
   } catch (error) {
     console.error(`[salesforce-mcp] Tool ${toolName} failed:`, error.message);
     return {

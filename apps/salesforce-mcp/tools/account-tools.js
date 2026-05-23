@@ -7,12 +7,55 @@ import { z } from 'zod';
 import sf from '../lib/salesforce-client.js';
 import { esc, toAccount } from '../lib/helpers.js';
 
+// ============================================================
+// OUTPUT SCHEMAS
+// ============================================================
+
+const AccountRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  account_type: z.string(),
+  industry: z.string(),
+  phone: z.string(),
+  website: z.string(),
+  number_of_employees: z.number().nullable(),
+  annual_revenue: z.number().nullable(),
+  billing_city: z.string(),
+  billing_state: z.string(),
+  billing_street: z.string(),
+  billing_postal_code: z.string(),
+  owner_name: z.string(),
+  description: z.string(),
+  created_date: z.string(),
+});
+
+const AccountSearchResultSchema = z.object({
+  count: z.number(),
+  records: z.array(AccountRecordSchema),
+});
+
+const CreateAccountSuccessSchema = z.object({
+  success: z.literal(true),
+  account_id: z.string(),
+  name: z.string(),
+  account_type: z.string(),
+});
+
+const CreateAccountFailureSchema = z.object({
+  success: z.literal(false),
+  errors: z.array(z.string()),
+  name: z.string(),
+});
+
+const CreateAccountResultSchema = z.union([CreateAccountSuccessSchema, CreateAccountFailureSchema]);
+
 export const accountTools = {
   search_accounts: {
     schema: z.object({
       query: z.string().describe('Search term to match against account name'),
       limit: z.number().default(10).describe('Maximum number of results (default 10, max 50)'),
     }),
+    outputSchema: AccountSearchResultSchema,
     handler: async ({ query, limit = 10 }) => {
       limit = Math.min(Math.max(limit, 1), 50);
       const soql = 
@@ -37,6 +80,7 @@ export const accountTools = {
     schema: z.object({
       account_id: z.string().describe('The 15- or 18-character Salesforce Account ID'),
     }),
+    outputSchema: AccountRecordSchema,
     handler: async ({ account_id }) => {
       const r = await sf.getRecord('Account', account_id);
       return toAccount(r);
@@ -56,6 +100,7 @@ export const accountTools = {
       billing_street: z.string().default('').describe('Billing street address'),
       billing_postal_code: z.string().default('').describe('Billing ZIP/postal code'),
     }),
+    outputSchema: CreateAccountResultSchema,
     handler: async ({ name, account_type = '', industry = '', phone = '', website = '', description = '', billing_city = '', billing_state = '', billing_street = '', billing_postal_code = '' }) => {
       // Build payload — only include non-empty values
       const payload = {
