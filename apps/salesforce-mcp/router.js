@@ -11,7 +11,7 @@
  *   - Protocol version 2025-03-26
  *   - Bearer token authentication (SALESFORCE_MCP_BEARER_TOKEN env var)
  *   - 9 MCP tools across 3 categories (contacts, accounts, cases)
- *   - Request logging (last 50 requests at /salesforce/mcp-log)
+ *   - Request logging (last 50 requests at /salesforce/mcp-log, bearer-gated, headers redacted)
  *
  * Endpoints exposed under /salesforce:
  *   GET  /salesforce/             — JSON manifest
@@ -19,7 +19,7 @@
  *   POST /salesforce/mcp          — JSON-RPC (plain JSON or SSE-framed if Accept: text/event-stream)
  *   GET  /salesforce/mcp          — SSE stream (keepalive every 15s)
  *   DELETE /salesforce/mcp        — Session close stub (200)
- *   GET  /salesforce/mcp-log      — Last 50 requests
+ *   GET  /salesforce/mcp-log      — Last 50 requests (bearer-gated)
  */
 
 import express from "express";
@@ -215,7 +215,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// Bearer token authentication middleware — gates /mcp only (NOT /health, /, /mcp-log)
+// Bearer token authentication middleware — gates /mcp and /mcp-log (NOT /health, /)
 const BEARER = process.env.SALESFORCE_MCP_BEARER_TOKEN || "";
 if (!BEARER) {
   console.warn("[salesforce-mcp] ⚠️  SALESFORCE_MCP_BEARER_TOKEN not set — /mcp is UNAUTHENTICATED");
@@ -224,10 +224,16 @@ if (!BEARER) {
 // Request logging for /mcp POST (runs BEFORE auth so 401s get logged)
 router.use("/mcp", (req, res, next) => {
   if (req.method === "POST") {
+    // Redact sensitive headers — never store the bearer token in memory
+    const safeHeaders = { ...req.headers };
+    if (safeHeaders.authorization) safeHeaders.authorization = "[REDACTED]";
+    if (safeHeaders.Authorization) safeHeaders.Authorization = "[REDACTED]";
+    if (safeHeaders.cookie) safeHeaders.cookie = "[REDACTED]";
+
     const logEntry = {
       timestamp: new Date().toISOString(),
       method: req.body?.method || "(no method)",
-      headers: { ...req.headers },
+      headers: safeHeaders,
       body: req.body,
       response: null,
     };
@@ -267,7 +273,20 @@ router.use("/mcp", (req, res, next) => {
   next();
 });
 
-router.get("/mcp-log", (_req, res) => {
+// /mcp-log is also gated — it contains request bodies + responses with SF data
+router.get("/mcp-log", (req, res) => {
+  if (!BEARER) {
+    // dev mode: open access matches /mcp behaviour
+    return res.json({
+      total_requests: REQUEST_LOG.length,
+      requests: REQUEST_LOG.slice(-50).reverse(),
+    });
+  }
+  const got = req.headers.authorization || "";
+  if (got !== `Bearer ${BEARER}`) {
+    console.warn(`[salesforce-mcp] 401 — bad/missing bearer on GET /mcp-log`);
+    return res.status(401).json({ error: "unauthorized", detail: "Missing or invalid Bearer token" });
+  }
   res.json({
     total_requests: REQUEST_LOG.length,
     requests: REQUEST_LOG.slice(-50).reverse(),
