@@ -158,4 +158,63 @@ export const contactTools = {
       };
     },
   },
+
+  create_contact: {
+    schema: z.object({
+      first_name: z.string().default('').describe('Contact first name'),
+      last_name: z.string().describe('Contact last name (REQUIRED — Salesforce requires LastName)'),
+      email: z.string().default('').describe('Email address'),
+      phone: z.string().default('').describe('Phone number'),
+      mobile_phone: z.string().default('').describe('Mobile phone number'),
+      title: z.string().default('').describe('Job title'),
+      department: z.string().default('').describe('Department'),
+      mailing_city: z.string().default('').describe('Mailing city'),
+      mailing_state: z.string().default('').describe('Mailing state/province'),
+      mailing_street: z.string().default('').describe('Mailing street address'),
+      mailing_postal_code: z.string().default('').describe('Mailing ZIP/postal code'),
+      description: z.string().default('').describe('Contact description/notes'),
+      account_id: z.string().default('').describe('Salesforce Account ID to link to this contact'),
+    }),
+    handler: async ({ first_name = '', last_name, email = '', phone = '', mobile_phone = '', title = '', department = '', mailing_city = '', mailing_state = '', mailing_street = '', mailing_postal_code = '', description = '', account_id = '' }) => {
+      // Build payload — only include non-empty values
+      const payload = {
+        LastName: last_name,
+      };
+      if (first_name) payload.FirstName = first_name;
+      if (email) payload.Email = email;
+      if (phone) payload.Phone = phone;
+      if (mobile_phone) payload.MobilePhone = mobile_phone;
+      if (title) payload.Title = title;
+      if (department) payload.Department = department;
+      if (mailing_city) payload.MailingCity = mailing_city;
+      if (mailing_state) payload.MailingState = mailing_state;
+      if (mailing_street) payload.MailingStreet = mailing_street;
+      if (mailing_postal_code) payload.MailingPostalCode = mailing_postal_code;
+      if (description) payload.Description = description;
+      if (account_id) payload.AccountId = account_id;
+
+      const result = await sf.createRecord('Contact', payload);
+
+      if (result.success) {
+        const newId = result.id;
+        return {
+          success: true,
+          contact_id: newId,
+          first_name,
+          last_name,
+          email,
+          phone,
+          account_id: account_id || '',
+        };
+      }
+
+      const errorMsgs = (result.errors || []).map(e => String(e));
+      return {
+        success: false,
+        errors: errorMsgs,
+        first_name,
+        last_name,
+      };
+    },
+  },
 };

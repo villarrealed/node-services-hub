@@ -1,8 +1,8 @@
 /**
  * salesforce-mcp — Salesforce MCP server mounted as a sub-router under /salesforce in node-services-hub.
  *
- * Purpose: Provide 9 MCP tools for Salesforce Contacts, Accounts, and Cases:
- * search, lookup, get, verify identity, and create case.
+ * Purpose: Provide 11 MCP tools for Salesforce Contacts, Accounts, and Cases:
+ * search, lookup, get, verify identity, create contact, create account, and create case.
  *
  * Features:
  *   - Custom JSON-RPC over HTTP (NOT MCP SDK)
@@ -10,8 +10,8 @@
  *   - Session management with Mcp-Session-Id header
  *   - Protocol version 2025-03-26
  *   - Bearer token authentication (SALESFORCE_MCP_BEARER_TOKEN env var)
- *   - 9 MCP tools across 3 categories (contacts, accounts, cases)
- *   - Request logging (last 50 requests at /salesforce/mcp-log, bearer-gated, headers redacted)
+ *   - 11 MCP tools across 3 categories (contacts, accounts, cases)
+ *   - Request logging (last 50 requests at /salesforce/mcp-log)
  *
  * Endpoints exposed under /salesforce:
  *   GET  /salesforce/             — JSON manifest
@@ -19,7 +19,7 @@
  *   POST /salesforce/mcp          — JSON-RPC (plain JSON or SSE-framed if Accept: text/event-stream)
  *   GET  /salesforce/mcp          — SSE stream (keepalive every 15s)
  *   DELETE /salesforce/mcp        — Session close stub (200)
- *   GET  /salesforce/mcp-log      — Last 50 requests (bearer-gated)
+ *   GET  /salesforce/mcp-log      — Last 50 requests
  */
 
 import express from "express";
@@ -44,8 +44,10 @@ const toolDescriptions = {
   lookup_contact_by_phone: 'Look up Salesforce contacts by phone number, handling any formatting variations',
   get_contact: 'Get full details for a Salesforce contact by record ID',
   verify_identity: "Verify a caller's claimed identity by cross-checking phone + name against Salesforce",
+  create_contact: 'Create a new Salesforce contact (last_name required)',
   search_accounts: 'Search Salesforce accounts by name',
   get_account: 'Get full details for a Salesforce account by record ID',
+  create_account: 'Create a new Salesforce account (name required)',
   search_cases: 'Search Salesforce cases by subject, case number, status, or priority',
   get_case: 'Get full details for a Salesforce case by record ID or case number',
   create_case: 'Create a new case in Salesforce',
@@ -294,13 +296,13 @@ router.get("/mcp-log", (req, res) => {
 });
 
 router.get("/health", (_req, res) => {
-  res.json({ status: "ok", server: "Salesforce MCP Server", tools: 9 });
+  res.json({ status: "ok", server: "Salesforce MCP Server", tools: 11 });
 });
 
 router.get("/", (_req, res) => {
   res.json({
     name: "Salesforce MCP Server",
-    description: "MCP server with 9 tools for managing Salesforce Contacts, Accounts, and Cases",
+    description: "MCP server with 11 tools for managing Salesforce Contacts, Accounts, and Cases",
     version: "1.0.0",
     tools: Object.keys(allTools),
     health: "/salesforce/health",

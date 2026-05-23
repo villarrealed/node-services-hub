@@ -42,4 +42,53 @@ export const accountTools = {
       return toAccount(r);
     },
   },
+
+  create_account: {
+    schema: z.object({
+      name: z.string().describe('Account name (REQUIRED)'),
+      account_type: z.string().default('').describe('Account type (e.g. Customer, Partner)'),
+      industry: z.string().default('').describe('Industry classification'),
+      phone: z.string().default('').describe('Main phone number'),
+      website: z.string().default('').describe('Website URL'),
+      description: z.string().default('').describe('Account description'),
+      billing_city: z.string().default('').describe('Billing city'),
+      billing_state: z.string().default('').describe('Billing state/province'),
+      billing_street: z.string().default('').describe('Billing street address'),
+      billing_postal_code: z.string().default('').describe('Billing ZIP/postal code'),
+    }),
+    handler: async ({ name, account_type = '', industry = '', phone = '', website = '', description = '', billing_city = '', billing_state = '', billing_street = '', billing_postal_code = '' }) => {
+      // Build payload — only include non-empty values
+      const payload = {
+        Name: name,
+      };
+      if (account_type) payload.Type = account_type;
+      if (industry) payload.Industry = industry;
+      if (phone) payload.Phone = phone;
+      if (website) payload.Website = website;
+      if (description) payload.Description = description;
+      if (billing_city) payload.BillingCity = billing_city;
+      if (billing_state) payload.BillingState = billing_state;
+      if (billing_street) payload.BillingStreet = billing_street;
+      if (billing_postal_code) payload.BillingPostalCode = billing_postal_code;
+
+      const result = await sf.createRecord('Account', payload);
+
+      if (result.success) {
+        const newId = result.id;
+        return {
+          success: true,
+          account_id: newId,
+          name,
+          account_type: account_type || '',
+        };
+      }
+
+      const errorMsgs = (result.errors || []).map(e => String(e));
+      return {
+        success: false,
+        errors: errorMsgs,
+        name,
+      };
+    },
+  },
 };
