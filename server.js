@@ -27,6 +27,7 @@ import raddMcp from "./apps/radd-mcp/router.js";
 import testerRouter from "./apps/mcp-tester/router.js";
 import farmersVaRouter from "./apps/farmers-va/router.js";
 import farmersVaMcpRouter from "./apps/farmers-va-mcp/router.js";
+import salesforceMcpRouter from "./apps/salesforce-mcp/router.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,6 +50,7 @@ const STATUS_APPS = [
   { prefix: "/tester", name: "mcp-tester", healthPath: "/tester/health" },
   { prefix: "/farmers-va", name: "farmers-va", healthPath: "/farmers-va/health" },
   { prefix: "/farmers-va-mcp", name: "farmers-va-mcp", healthPath: "/farmers-va-mcp/health" },
+  { prefix: "/salesforce", name: "salesforce-mcp", healthPath: "/salesforce/health" },
 ];
 
 app.use("/jds", jdsRouter);
@@ -71,6 +73,9 @@ MOUNTED.push({ prefix: "/farmers-va", name: "farmers-va" });
 
 app.use("/farmers-va-mcp", farmersVaMcpRouter);
 MOUNTED.push({ prefix: "/farmers-va-mcp", name: "farmers-va-mcp" });
+
+app.use("/salesforce", salesforceMcpRouter);
+MOUNTED.push({ prefix: "/salesforce", name: "salesforce-mcp" });
 
 // ─── Hub routes ──────────────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));
@@ -113,7 +118,7 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "node-services-hub",
-    version: "0.10.0",
+    version: "0.11.0",
     mounted: MOUNTED,
     uptime_sec: Math.round(process.uptime()),
   });

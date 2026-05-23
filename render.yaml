@@ -55,3 +55,23 @@ services:
       
       # ─── Farmers Insurance MCP (/farmers) ──────────────────────────────────
       # No environment variables required (all data hardcoded for demo)
+
+      # ─── Salesforce MCP (/salesforce) ──────────────────────────────────────
+      # OAuth refresh-token flow against Cisco shared Salesforce org
+      # (External Client App: "MCP Server", owner: edvill@cisco.com)
+      - key: SF_CLIENT_ID
+        sync: false
+      - key: SF_CLIENT_SECRET
+        sync: false
+      - key: SF_REFRESH_TOKEN
+        sync: false
+      # Bearer token required by Webex AI Agent Studio when calling /salesforce/mcp
+      - key: SALESFORCE_MCP_BEARER_TOKEN
+        sync: false
+      # Optional overrides (leave empty for defaults)
+      - key: SF_LOGIN_URL
+        value: ""
+      - key: SF_INSTANCE_URL
+        value: ""
+      - key: SF_API_VERSION
+        value: ""
