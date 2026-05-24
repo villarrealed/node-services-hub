@@ -1,8 +1,8 @@
 /**
  * salesforce-mcp — Salesforce MCP server mounted as a sub-router under /salesforce in node-services-hub.
  *
- * Purpose: Provide 11 MCP tools for Salesforce Contacts, Accounts, and Cases:
- * search, lookup, get, verify identity, create contact, create account, and create case.
+ * Purpose: Provide MCP tools for Salesforce Contacts, Accounts, and Cases,
+ * plus purpose-built Agent Assist tools for Webex Contact Center Real-Time Assist.
  *
  * Features:
  *   - Custom JSON-RPC over HTTP (NOT MCP SDK)
@@ -10,7 +10,7 @@
  *   - Session management with Mcp-Session-Id header
  *   - Protocol version 2025-03-26
  *   - Bearer token authentication (SALESFORCE_MCP_BEARER_TOKEN env var)
- *   - 11 MCP tools across 3 categories (contacts, accounts, cases)
+ *   - 14 MCP tools across 4 categories (contacts, accounts, cases, agent-assist)
  *   - Request logging (last 50 requests at /salesforce/mcp-log)
  *
  * Endpoints exposed under /salesforce:
@@ -28,6 +28,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { contactTools } from "./tools/contact-tools.js";
 import { accountTools } from "./tools/account-tools.js";
 import { caseTools } from "./tools/case-tools.js";
+import { agentAssistTools } from "./tools/agent-assist-tools.js";
 
 // ============================================================
 // TOOL REGISTRY
@@ -37,6 +38,7 @@ const allTools = {
   ...contactTools,
   ...accountTools,
   ...caseTools,
+  ...agentAssistTools,
 };
 
 const toolDescriptions = {
@@ -51,6 +53,13 @@ const toolDescriptions = {
   search_cases: 'Search Salesforce cases by subject, case number, status, or priority',
   get_case: 'Get full details for a Salesforce case by record ID or case number',
   create_case: 'Create a new case in Salesforce',
+  // Agent Assist tools — purpose-built for Webex Real-Time Assist
+  identify_caller_by_ani:
+    'Screen-pop equivalent for a human agent. Given an ANI (caller phone number), returns the matching contact, account, loyalty tier, open-case count, and Lightning UI deep links. Designed to be the first call when a call starts. Does NOT disclose PII beyond name until identity is verified.',
+  verify_caller_lightweight:
+    "Lightweight voice-check identity verification suitable for outbound callbacks where the customer was already authenticated on the portal. Requires last name; accepts DOB or ZIP as an optional second factor. Returns confidence (high|medium|low|none). Use after identify_caller_by_ani.",
+  get_customer_summary:
+    "One-shot agent briefing: returns the contact, account, all open cases plus any closed in the last 7 days, sorted recent-first, with Lightning UI deep links and a one-line agent_briefing string the agent can read at a glance. Call after the caller is verified.",
 };
 
 // Convert zod schemas to JSON Schema for MCP
@@ -313,7 +322,7 @@ router.get("/mcp-log", (req, res) => {
 });
 
 router.get("/health", (_req, res) => {
-  res.json({ status: "ok", server: "Salesforce MCP Server", tools: 11 });
+  res.json({ status: "ok", server: "Salesforce MCP Server", tools: Object.keys(allTools).length });
 });
 
 router.get("/", (_req, res) => {
