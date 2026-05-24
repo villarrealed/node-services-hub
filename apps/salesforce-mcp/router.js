@@ -10,7 +10,7 @@
  *   - Session management with Mcp-Session-Id header
  *   - Protocol version 2025-03-26
  *   - Bearer token authentication (SALESFORCE_MCP_BEARER_TOKEN env var)
- *   - 14 MCP tools across 4 categories (contacts, accounts, cases, agent-assist)
+ *   - 15 MCP tools across 4 categories (contacts, accounts, cases, agent-assist)
  *   - Request logging (last 50 requests at /salesforce/mcp-log)
  *
  * Endpoints exposed under /salesforce:
@@ -59,7 +59,9 @@ const toolDescriptions = {
   verify_caller_lightweight:
     "Lightweight voice-check identity verification suitable for outbound callbacks where the customer was already authenticated on the portal. Requires last name; accepts DOB or ZIP as an optional second factor. Returns confidence (high|medium|low|none). Use after identify_caller_by_ani.",
   get_customer_summary:
-    "One-shot agent briefing: returns the contact, account, all open cases plus any closed in the last 7 days, sorted recent-first, with Lightning UI deep links and a one-line agent_briefing string the agent can read at a glance. Call after the caller is verified.",
+    "One-shot agent briefing: returns the contact, account, all open cases plus any closed in the last 7 days, sorted recent-first, with Lightning UI deep links and a one-line agent_briefing string the agent can read at a glance. Also extracts and returns CLAIMS as a first-class array (parsed from cases prefixed with [CLAIM] in the subject). Call after the caller is verified.",
+  start_claim_fnol:
+    "First Notice of Loss — opens a new insurance claim during the live call. Creates a Salesforce Case prefixed with [CLAIM] FNOL, captures structured claim metadata (date_of_loss, vehicle, damage, etc.), generates a synthetic claim number to read back to the caller, and returns next-step guidance tailored to the claim type. Use when the caller wants to file a new claim. This is a WRITE operation — confirm with the caller before calling.",
 };
 
 // Convert zod schemas to JSON Schema for MCP

@@ -3,12 +3,19 @@
  *
  * Purpose-built tools for Webex Contact Center Real-Time Assist (human agent assistant).
  *
- * Three tools, locked schemas (do not change after registering in Control Hub —
+ * Four tools, locked schemas (do not change after registering in Control Hub —
  * MCP actions are read-only once created in Webex AI):
  *
  *   1. identify_caller_by_ani(ani)             — Screen-pop from inbound/outbound phone number
  *   2. verify_caller_lightweight(...)          — Voice-check verification (last name + DOB or zip)
- *   3. get_customer_summary(contact_id)        — One-shot package: contact + account + cases + deep links
+ *   3. get_customer_summary(contact_id)        — One-shot package: contact + account + cases + claims + deep links
+ *   4. start_claim_fnol(...)                   — First Notice of Loss: open a new claim during the call (WRITE)
+ *
+ * Claim modeling convention:
+ *   - This Salesforce org has no Claim__c object — we model claims as Cases whose
+ *     Subject starts with "[CLAIM] " and whose Description contains a YAML-style
+ *     `claim_metadata:` block. get_customer_summary parses that block back out
+ *     so claims surface as first-class objects to the AI Assist UI.
  *
  * Output design principles:
  *   - Every record includes a `*_url` deep link to Lightning UI
@@ -74,6 +81,65 @@ function caseOneLine(description) {
   return firstLine.length > 200 ? `${firstLine.slice(0, 197)}...` : firstLine;
 }
 
+/**
+ * Detect whether a case subject indicates this is a claim record.
+ * Convention: subject begins with "[CLAIM]".
+ */
+function isClaimCase(subject) {
+  return /^\s*\[CLAIM\]/i.test(subject || '');
+}
+
+/**
+ * Parse a claim_metadata block out of a Case.Description.
+ *
+ * Expected format (YAML-ish, lenient):
+ *   claim_metadata:
+ *     claim_number: FA-CLM-2026-00427
+ *     claim_type: auto-glass
+ *     date_of_loss: 2026-01-22
+ *     vehicle: 2021 Toyota Camry SE
+ *     damage: Rock chip on driver-side windshield
+ *     deductible: Comprehensive $500 — waived for glass-only repair
+ *     status: Closed paid
+ *     ...any other key: value pairs
+ *
+ * Returns an object with snake_case keys, plus a `narrative` field containing
+ * any text that came AFTER the metadata block. Returns {} if no block found.
+ */
+function parseClaimMetadata(description) {
+  if (!description) return {};
+  const lines = description.split('\n');
+  const startIdx = lines.findIndex((l) => /^\s*claim_metadata\s*:\s*$/i.test(l));
+  if (startIdx === -1) return {};
+
+  const meta = {};
+  let i = startIdx + 1;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    // Stop at first non-indented non-empty line
+    if (line.trim() === '') continue;
+    if (!/^\s{2,}/.test(line) && line.trim() !== '') break;
+    const m = line.match(/^\s+([a-zA-Z0-9_]+)\s*:\s*(.+)$/);
+    if (m) {
+      meta[m[1].toLowerCase()] = m[2].trim();
+    }
+  }
+  const narrative = lines.slice(i).join('\n').trim();
+  if (narrative) meta.narrative = narrative;
+  return meta;
+}
+
+/**
+ * Generate a synthetic claim number for new FNOL claims.
+ * Format: FA-CLM-YYYY-NNNNN where NNNNN is a pseudo-random 5-digit suffix.
+ * Not collision-resistant — adequate for demo use.
+ */
+function generateClaimNumber() {
+  const year = new Date().getUTCFullYear();
+  const suffix = String(Math.floor(Math.random() * 90000) + 10000);
+  return `FA-CLM-${year}-${suffix}`;
+}
+
 // ============================================================
 // OUTPUT SCHEMAS
 // ============================================================
@@ -117,6 +183,26 @@ const CaseSummarySchema = z.object({
   created_date: z.string(),
   closed_date: z.string(),
   case_url: z.string(),
+  is_claim: z.boolean(),
+});
+
+const ClaimSummarySchema = z.object({
+  case_id: z.string(),
+  case_number: z.string(),
+  claim_number: z.string(),
+  claim_type: z.string(),
+  date_of_loss: z.string(),
+  vehicle: z.string(),
+  damage: z.string(),
+  status: z.string(),
+  deductible: z.string(),
+  payout: z.string(),
+  premium_impact: z.string(),
+  classification: z.enum(['open', 'closed_recent', 'older']),
+  created_date: z.string(),
+  closed_date: z.string(),
+  case_url: z.string(),
+  one_line_summary: z.string(),
 });
 
 const CustomerSummaryResultSchema = z.object({
@@ -142,10 +228,25 @@ const CustomerSummaryResultSchema = z.object({
     account_url: z.string(),
   }),
   cases: z.array(CaseSummarySchema),
+  claims: z.array(ClaimSummarySchema),
   open_case_count: z.number(),
   closed_recent_count: z.number(),
   total_case_count: z.number(),
+  open_claim_count: z.number(),
+  total_claim_count: z.number(),
   agent_briefing: z.string(),
+});
+
+const StartClaimFnolResultSchema = z.object({
+  success: z.boolean(),
+  case_id: z.string(),
+  case_number: z.string(),
+  claim_number: z.string(),
+  subject: z.string(),
+  status: z.string(),
+  case_url: z.string(),
+  next_steps: z.string(),
+  errors: z.array(z.string()),
 });
 
 // ============================================================
@@ -461,11 +562,45 @@ export const agentAssistTools = {
           created_date: c.created_date,
           closed_date: c.closed_date,
           case_url: lightningUrl('Case', c.id),
+          is_claim: isClaimCase(c.subject),
         };
       });
 
+      // 2b) Extract claim records — parse claim_metadata from descriptions
+      const claims = caseRows
+        .filter((row) => {
+          const c = toCase(row);
+          return isClaimCase(c.subject);
+        })
+        .map((row) => {
+          const c = toCase(row);
+          const meta = parseClaimMetadata(c.description);
+          const classification = classifyCase(c);
+          return {
+            case_id: c.id,
+            case_number: c.case_number,
+            claim_number: meta.claim_number || '',
+            claim_type: meta.claim_type || '',
+            date_of_loss: meta.date_of_loss || '',
+            vehicle: meta.vehicle || '',
+            damage: meta.damage || '',
+            status: meta.status || c.status,
+            deductible: meta.deductible || '',
+            payout: meta.repair_cost || meta.payout || '',
+            premium_impact: meta.premium_impact || '',
+            classification,
+            created_date: c.created_date,
+            closed_date: c.closed_date,
+            case_url: lightningUrl('Case', c.id),
+            one_line_summary: meta.damage
+              ? `${meta.claim_type || 'claim'} — ${meta.damage}`
+              : caseOneLine(c.description),
+          };
+        });
+
       const openCount = cases.filter((c) => c.classification === 'open').length;
       const closedRecentCount = cases.filter((c) => c.classification === 'closed_recent').length;
+      const openClaimCount = claims.filter((c) => c.classification === 'open').length;
 
       // 3) Build the agent briefing — a one-paragraph summary the agent can glance at
       const firstName = s(contactRec, 'FirstName');
@@ -487,6 +622,13 @@ export const agentAssistTools = {
       if (closedRecentCount > 0) {
         briefingParts.push(`${closedRecentCount} closed in the last 7 days`);
       }
+      if (claims.length > 0) {
+        briefingParts.push(
+          `${claims.length} claim${claims.length === 1 ? '' : 's'} on file${
+            openClaimCount > 0 ? ` (${openClaimCount} open)` : ''
+          }`
+        );
+      }
 
       let briefing = briefingParts.join(' | ');
 
@@ -497,6 +639,13 @@ export const agentAssistTools = {
       } else if (cases.length > 0) {
         const recent = cases[0];
         briefing += `. Most recent: ${recent.case_number} (${recent.status}) — ${recent.subject}`;
+      }
+
+      // Add most recent claim if any
+      if (claims.length > 0) {
+        const lastClaim = claims[0];
+        const dol = lastClaim.date_of_loss ? ` (loss ${lastClaim.date_of_loss})` : '';
+        briefing += `. Last claim: ${lastClaim.claim_number || lastClaim.case_number} ${lastClaim.claim_type}${dol} — ${lastClaim.status}`;
       }
 
       return {
@@ -522,11 +671,232 @@ export const agentAssistTools = {
           account_url: lightningUrl('Account', accountId),
         },
         cases,
+        claims,
         open_case_count: openCount,
         closed_recent_count: closedRecentCount,
         total_case_count: cases.length,
+        open_claim_count: openClaimCount,
+        total_claim_count: claims.length,
         agent_briefing: briefing,
       };
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 4. start_claim_fnol — First Notice of Loss (WRITE)
+  // ----------------------------------------------------------
+  //
+  // Opens a new claim during the live call. Creates a Salesforce Case with
+  //   - Subject prefix "[CLAIM] FNOL — ..."
+  //   - Status = New, Origin = Phone, Type = Question (org picklist doesn't have Claim)
+  //   - Description = structured claim_metadata block + agent notes
+  //
+  // The synthetic claim_number returned is what the agent reads back to the
+  // caller. It's NOT a real claim system number — this demo doesn't integrate
+  // with Guidewire / Duck Creek / etc.
+  start_claim_fnol: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('Salesforce Contact ID of the caller (from identify_caller_by_ani). REQUIRED.'),
+      account_id: z
+        .string()
+        .default('')
+        .describe('Salesforce Account ID — optional, will be looked up from contact if omitted.'),
+      claim_type: z
+        .string()
+        .describe(
+          'Type of claim. Examples: auto-glass, collision, comprehensive, theft, vandalism, roadside, total-loss.'
+        ),
+      date_of_loss: z
+        .string()
+        .describe(
+          'Date the loss/incident occurred. Accepts YYYY-MM-DD, MM/DD/YYYY, or "today" / "yesterday". Will be normalized.'
+        ),
+      vehicle: z
+        .string()
+        .describe(
+          'Vehicle involved — year/make/model and any identifying info (e.g. "2024 Honda CR-V EX, just added Saturday").'
+        ),
+      damage_description: z
+        .string()
+        .describe(
+          'What happened and what is damaged. Plain language from the caller (e.g. "Rock chip on driver-side windshield from highway debris, about 1 inch, not spreading").'
+        ),
+      location_of_incident: z
+        .string()
+        .default('')
+        .describe('Where the incident happened. City/state or highway/intersection.'),
+      injuries_reported: z
+        .boolean()
+        .default(false)
+        .describe('Were any injuries reported? If true, escalation to BI adjuster is recommended.'),
+      police_report_filed: z
+        .boolean()
+        .default(false)
+        .describe('Has a police report been filed? Required for theft, vandalism, hit-and-run.'),
+      other_party_involved: z
+        .boolean()
+        .default(false)
+        .describe('Is another driver / vehicle involved? If true, collision flow applies.'),
+      agent_notes: z
+        .string()
+        .default('')
+        .describe('Free-form notes from the agent — context, caller demeanor, anything relevant.'),
+    }),
+    outputSchema: StartClaimFnolResultSchema,
+    handler: async ({
+      contact_id,
+      account_id = '',
+      claim_type,
+      date_of_loss,
+      vehicle,
+      damage_description,
+      location_of_incident = '',
+      injuries_reported = false,
+      police_report_filed = false,
+      other_party_involved = false,
+      agent_notes = '',
+    }) => {
+      if (!contact_id) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          claim_number: '',
+          subject: '',
+          status: '',
+          case_url: '',
+          next_steps: '',
+          errors: ['contact_id is required — call identify_caller_by_ani first.'],
+        };
+      }
+
+      // Resolve account_id from contact if missing
+      let resolvedAccountId = account_id;
+      if (!resolvedAccountId) {
+        try {
+          const contactRec = await sf.getRecord('Contact', contact_id);
+          resolvedAccountId = s(contactRec, 'AccountId');
+        } catch (e) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            claim_number: '',
+            subject: '',
+            status: '',
+            case_url: '',
+            next_steps: '',
+            errors: [`Contact ${contact_id} not found: ${e.message}`],
+          };
+        }
+      }
+
+      // Normalize date_of_loss
+      let dol = (date_of_loss || '').trim().toLowerCase();
+      const today = new Date();
+      if (dol === 'today') {
+        dol = today.toISOString().slice(0, 10);
+      } else if (dol === 'yesterday') {
+        const y = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        dol = y.toISOString().slice(0, 10);
+      } else {
+        const norm = normalizeDob(date_of_loss);
+        dol = norm || date_of_loss;
+      }
+
+      const claimNumber = generateClaimNumber();
+      const subject = `[CLAIM] FNOL — ${claim_type} — ${vehicle}`.slice(0, 255);
+
+      // Build the structured claim_metadata block
+      const metaLines = [
+        'claim_metadata:',
+        `  claim_number: ${claimNumber}`,
+        `  claim_type: ${claim_type}`,
+        `  date_of_loss: ${dol}`,
+        `  vehicle: ${vehicle}`,
+        `  damage: ${damage_description}`,
+        `  location_of_incident: ${location_of_incident || 'not provided'}`,
+        `  injuries_reported: ${injuries_reported ? 'yes' : 'no'}`,
+        `  police_report_filed: ${police_report_filed ? 'yes' : 'no'}`,
+        `  other_party_involved: ${other_party_involved ? 'yes' : 'no'}`,
+        `  status: FNOL — pending adjuster assignment`,
+        '',
+      ];
+      const description = metaLines.join('\n') + (agent_notes ? `Agent notes:\n${agent_notes}\n` : '');
+
+      // Decide next steps based on claim characteristics
+      const nextStepsList = [];
+      if (claim_type.toLowerCase().includes('glass') || claim_type.toLowerCase().includes('windshield')) {
+        nextStepsList.push('Glass fast-track: offer mobile repair (Safelite or local vendor). Comprehensive deductible may be waived for chip repair in most states.');
+      }
+      if (injuries_reported) {
+        nextStepsList.push('ESCALATE: bodily-injury adjuster assignment required. Notify supervisor.');
+      }
+      if (other_party_involved && !police_report_filed) {
+        nextStepsList.push('Advise customer to file a police report if not already done.');
+      }
+      if (!nextStepsList.length) {
+        nextStepsList.push('Adjuster will be assigned within 1 business day. Customer will receive claim number via SMS + email.');
+      }
+      nextStepsList.push(`Claim number to read back to caller: ${claimNumber}`);
+      const nextSteps = nextStepsList.join(' ');
+
+      // Create the case
+      const payload = {
+        Subject: subject,
+        Status: 'New',
+        Priority: injuries_reported ? 'High' : 'Medium',
+        Origin: 'Phone',
+        Type: 'Question', // org picklist limitation — claims modeled as Question
+        Reason: 'New problem',
+        ContactId: contact_id,
+        Description: description,
+      };
+      if (resolvedAccountId) payload.AccountId = resolvedAccountId;
+
+      try {
+        const result = await sf.createRecord('Case', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            claim_number: claimNumber,
+            subject,
+            status: '',
+            case_url: '',
+            next_steps: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        const caseRecord = await sf.getRecord('Case', newId, ['CaseNumber', 'Subject', 'Status']);
+        return {
+          success: true,
+          case_id: newId,
+          case_number: s(caseRecord, 'CaseNumber'),
+          claim_number: claimNumber,
+          subject: s(caseRecord, 'Subject'),
+          status: s(caseRecord, 'Status'),
+          case_url: lightningUrl('Case', newId),
+          next_steps: nextSteps,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          claim_number: claimNumber,
+          subject,
+          status: '',
+          case_url: '',
+          next_steps: '',
+          errors: [e.message || String(e)],
+        };
+      }
     },
   },
 };
@@ -598,9 +968,12 @@ function emptySummary(contact_id, errorMsg) {
       account_url: '',
     },
     cases: [],
+    claims: [],
     open_case_count: 0,
     closed_recent_count: 0,
     total_case_count: 0,
+    open_claim_count: 0,
+    total_claim_count: 0,
     agent_briefing: errorMsg,
   };
 }
