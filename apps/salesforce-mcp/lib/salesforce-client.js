@@ -57,17 +57,18 @@ class SalesforceClient {
     }
 
     const url = `${this.instanceUrl}/services/data/${this.apiVersion}${path}`;
+    const { headers: optHeaders, ...restOpts } = opts;
     const headers = {
+      ...optHeaders,
       Authorization: `Bearer ${this.accessToken}`,
-      ...opts.headers,
     };
 
     try {
       const response = await axios({
         method,
         url,
+        ...restOpts,
         headers,
-        ...opts,
       });
       return response.data;
     } catch (error) {
@@ -76,14 +77,14 @@ class SalesforceClient {
         console.log('[salesforce-client] Access token expired, refreshing...');
         await this._refreshAccessToken();
         const retryHeaders = {
+          ...optHeaders,
           Authorization: `Bearer ${this.accessToken}`,
-          ...opts.headers,
         };
         const retryResponse = await axios({
           method,
           url,
+          ...restOpts,
           headers: retryHeaders,
-          ...opts,
         });
         return retryResponse.data;
       }
