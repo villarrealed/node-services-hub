@@ -122,6 +122,16 @@ class SalesforceClient {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  /**
+   * Update an existing record via PATCH. Returns nothing on success (SF returns 204).
+   */
+  async updateRecord(sobject, recordId, data) {
+    return await this._request('PATCH', `/sobjects/${sobject}/${recordId}`, {
+      data,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }
 
 // Export singleton instance

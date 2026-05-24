@@ -10,7 +10,7 @@
  *   - Session management with Mcp-Session-Id header
  *   - Protocol version 2025-03-26
  *   - Bearer token authentication (SALESFORCE_MCP_BEARER_TOKEN env var)
- *   - 15 MCP tools across 4 categories (contacts, accounts, cases, agent-assist)
+ *   - 23 MCP tools across 4 categories (contacts, accounts, cases, agent-assist)
  *   - Request logging (last 50 requests at /salesforce/mcp-log)
  *
  * Endpoints exposed under /salesforce:
@@ -62,6 +62,22 @@ const toolDescriptions = {
     "One-shot agent briefing: returns the contact, account, all open cases plus any closed in the last 7 days, sorted recent-first, with Lightning UI deep links and a one-line agent_briefing string the agent can read at a glance. Also extracts and returns CLAIMS as a first-class array (parsed from cases prefixed with [CLAIM] in the subject). Call after the caller is verified.",
   start_claim_fnol:
     "First Notice of Loss — opens a new insurance claim during the live call. Creates a Salesforce Case prefixed with [CLAIM] FNOL, captures structured claim metadata (date_of_loss, vehicle, damage, etc.), generates a synthetic claim number to read back to the caller, and returns next-step guidance tailored to the claim type. Use when the caller wants to file a new claim. This is a WRITE operation — confirm with the caller before calling.",
+  verify_caller_strict:
+    "Strict 2-factor identity verification for autonomous AI agent operations (no human in loop). Requires last name AND (DOB or ZIP) — anything less returns verified=false. Use before any write operation in autonomous mode. Stricter than verify_caller_lightweight.",
+  add_vehicle_to_policy:
+    "Adds a vehicle to an existing auto policy by creating a Salesforce Asset linked to the account. Captures year/make/model/VIN/usage/mileage/coverage template. Returns asset ID and effective date. WRITE operation — only call after strict identity verification.",
+  send_insurance_proof:
+    "Sends proof-of-insurance documentation to the caller via email or SMS. Logs the send as a Salesforce Case for audit. Uses contact's primary email/phone if recipient not specified.",
+  send_confirmation:
+    "Sends a generic transaction confirmation (vehicle added, claim filed, appointment scheduled, etc.) via email or SMS. Logs as a Salesforce Case for audit.",
+  schedule_glass_repair:
+    "Books a windshield repair appointment with a vendor (Safelite Mobile by default). Captures vendor, time window, service address, and links to the FNOL claim case. Use after filing a glass FNOL.",
+  create_underwriting_referral:
+    "Creates an underwriting referral for vehicle adds or policy changes that fall outside autonomous auto-bind criteria (classic, high-value, modified, commercial use). Flags for next-business-day UW review and returns a referral ID.",
+  transfer_to_human:
+    "Warm transfer to a human agent queue. Logs the transfer with full context (reason, sentiment, what was discussed) so the receiving agent has continuity. Use whenever a request is out of Jessie's scope.",
+  schedule_callback:
+    "Books a callback for when human queues are closed. Captures preferred window, callback number, and topic. Creates a Salesforce Case for the morning queue to pick up.",
 };
 
 // Convert zod schemas to JSON Schema for MCP
@@ -330,7 +346,7 @@ router.get("/health", (_req, res) => {
 router.get("/", (_req, res) => {
   res.json({
     name: "Salesforce MCP Server",
-    description: "MCP server with 11 tools for managing Salesforce Contacts, Accounts, and Cases",
+    description: "MCP server with 23 tools for managing Salesforce Contacts, Accounts, and Cases",
     version: "1.0.0",
     tools: Object.keys(allTools),
     health: "/salesforce/health",

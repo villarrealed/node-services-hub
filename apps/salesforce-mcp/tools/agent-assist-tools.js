@@ -899,6 +899,1284 @@ export const agentAssistTools = {
       }
     },
   },
+
+  // ----------------------------------------------------------
+  // 5. verify_caller_strict — 2-factor verification for autonomous AI
+  // ----------------------------------------------------------
+  verify_caller_strict: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('The Salesforce Contact ID to verify against (from identify_caller_by_ani).'),
+      spoken_last_name: z
+        .string()
+        .describe("Caller's spoken last name. Case-insensitive match."),
+      spoken_dob: z
+        .string()
+        .default('')
+        .describe(
+          'Caller spoken date of birth. Accepts YYYY-MM-DD, MM/DD/YYYY, or MM-DD-YYYY. Leave empty if not provided — pass spoken_zip instead.'
+        ),
+      spoken_zip: z
+        .string()
+        .default('')
+        .describe(
+          "Caller spoken postal code (US 5-digit). Used as fallback factor when DOB isn't given."
+        ),
+    }),
+    outputSchema: VerifyCallerResultSchema,
+    handler: async ({ contact_id, spoken_last_name, spoken_dob = '', spoken_zip = '' }) => {
+      if (!contact_id) {
+        return {
+          verified: false,
+          confidence: 'none',
+          matched_factors: [],
+          unmatched_factors: [],
+          reason: 'No contact_id provided. Call identify_caller_by_ani first.',
+          contact_id: '',
+        };
+      }
+
+      let record;
+      try {
+        record = await sf.getRecord('Contact', contact_id);
+      } catch (e) {
+        return {
+          verified: false,
+          confidence: 'none',
+          matched_factors: [],
+          unmatched_factors: [],
+          reason: `Contact ${contact_id} not found in Salesforce: ${e.message}`,
+          contact_id,
+        };
+      }
+
+      const storedLast = (s(record, 'LastName') || '').trim().toLowerCase();
+      const storedBirthdate = s(record, 'Birthdate'); // SF format: YYYY-MM-DD
+      const storedZip = (s(record, 'MailingPostalCode') || '').trim();
+
+      const matched = [];
+      const unmatched = [];
+
+      // Factor 1: last name (always required)
+      const claimedLast = (spoken_last_name || '').trim().toLowerCase();
+      if (claimedLast && storedLast && claimedLast === storedLast) {
+        matched.push('last_name');
+      } else {
+        unmatched.push('last_name');
+      }
+
+      // Factor 2: DOB (if provided)
+      if (spoken_dob && spoken_dob.trim()) {
+        // Normalize spoken DOB to YYYY-MM-DD
+        const normalized = normalizeDob(spoken_dob);
+        if (normalized && storedBirthdate && normalized === storedBirthdate) {
+          matched.push('dob');
+        } else {
+          unmatched.push('dob');
+        }
+      }
+
+      // Factor 3: ZIP (if provided)
+      if (spoken_zip && spoken_zip.trim()) {
+        const claimedZip = digitsOnly(spoken_zip).slice(0, 5);
+        const stored5 = digitsOnly(storedZip).slice(0, 5);
+        if (claimedZip && stored5 && claimedZip === stored5) {
+          matched.push('zip');
+        } else {
+          unmatched.push('zip');
+        }
+      }
+
+      // Strict decision logic: MUST have last_name AND (dob OR zip)
+      let confidence = 'none';
+      let verified = false;
+      let reason = '';
+
+      const lastOk = matched.includes('last_name');
+      const dobOk = matched.includes('dob');
+      const zipOk = matched.includes('zip');
+      const dobAttempted = spoken_dob && spoken_dob.trim();
+      const zipAttempted = spoken_zip && spoken_zip.trim();
+
+      if (!lastOk) {
+        confidence = 'none';
+        verified = false;
+        reason = `Last name mismatch — caller said "${spoken_last_name}", record has "${s(
+          record,
+          'LastName'
+        )}". DO NOT disclose PII; re-verify or escalate.`;
+      } else if (dobOk || zipOk) {
+        confidence = 'high';
+        verified = true;
+        reason = `Verified — last name + ${dobOk ? 'DOB' : 'ZIP'} match. Safe to proceed with autonomous operations.`;
+      } else if (lastOk && !dobAttempted && !zipAttempted) {
+        confidence = 'low';
+        verified = false;
+        reason = `Last name matches but no second factor was provided. For autonomous operations, a second factor (DOB or ZIP) is REQUIRED. Ask for DOB or ZIP before proceeding.`;
+      } else {
+        confidence = 'low';
+        verified = false;
+        reason = `Last name matches but ${
+          dobAttempted ? 'DOB' : 'ZIP'
+        } does not. Re-ask for the second factor before proceeding.`;
+      }
+
+      return {
+        verified,
+        confidence,
+        matched_factors: matched,
+        unmatched_factors: unmatched,
+        reason,
+        contact_id,
+      };
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 6. add_vehicle_to_policy — Add vehicle as Asset
+  // ----------------------------------------------------------
+  add_vehicle_to_policy: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('Salesforce Contact ID of the policy holder. Account is looked up from contact.'),
+      vin: z
+        .string()
+        .default('')
+        .describe('Vehicle Identification Number (17 chars). Empty if not yet provided.'),
+      year: z
+        .number()
+        .describe('Vehicle model year, e.g. 2024'),
+      make: z
+        .string()
+        .describe('Vehicle manufacturer, e.g. Honda'),
+      model: z
+        .string()
+        .describe('Vehicle model name, e.g. CR-V EX'),
+      usage_type: z
+        .string()
+        .default('personal')
+        .describe('How the vehicle is used: personal, commute, business, pleasure'),
+      annual_mileage: z
+        .number()
+        .default(12000)
+        .describe('Estimated annual miles'),
+      garaged_zip: z
+        .string()
+        .default('')
+        .describe('ZIP code where vehicle is garaged overnight'),
+      coverage_template: z
+        .string()
+        .default('mirror_existing')
+        .describe('Coverage to apply: mirror_existing (copy from another vehicle on policy), state_minimum, custom'),
+      effective_date: z
+        .string()
+        .default('')
+        .describe("When coverage begins. Accepts YYYY-MM-DD or 'today'. Defaults to today."),
+      agent_notes: z
+        .string()
+        .default('')
+        .describe('Free-form notes from Jessie or the agent'),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      asset_id: z.string(),
+      asset_name: z.string(),
+      vehicle_description: z.string(),
+      effective_date: z.string(),
+      account_id: z.string(),
+      asset_url: z.string(),
+      next_steps: z.string(),
+      errors: z.array(z.string()),
+    }),
+    handler: async ({
+      contact_id,
+      vin = '',
+      year,
+      make,
+      model,
+      usage_type = 'personal',
+      annual_mileage = 12000,
+      garaged_zip = '',
+      coverage_template = 'mirror_existing',
+      effective_date = '',
+      agent_notes = '',
+    }) => {
+      if (!contact_id) {
+        return {
+          success: false,
+          asset_id: '',
+          asset_name: '',
+          vehicle_description: '',
+          effective_date: '',
+          account_id: '',
+          asset_url: '',
+          next_steps: '',
+          errors: ['contact_id is required'],
+        };
+      }
+
+      // Look up account from contact
+      let accountId = '';
+      try {
+        const contactRec = await sf.getRecord('Contact', contact_id);
+        accountId = s(contactRec, 'AccountId');
+        if (!accountId) {
+          return {
+            success: false,
+            asset_id: '',
+            asset_name: '',
+            vehicle_description: '',
+            effective_date: '',
+            account_id: '',
+            asset_url: '',
+            next_steps: '',
+            errors: ['Contact has no associated Account'],
+          };
+        }
+      } catch (e) {
+        return {
+          success: false,
+          asset_id: '',
+          asset_name: '',
+          vehicle_description: '',
+          effective_date: '',
+          account_id: '',
+          asset_url: '',
+          next_steps: '',
+          errors: [`Contact ${contact_id} not found: ${e.message}`],
+        };
+      }
+
+      // Normalize effective_date
+      let effDate = (effective_date || '').trim().toLowerCase();
+      const today = new Date();
+      if (effDate === 'today' || effDate === '') {
+        effDate = today.toISOString().slice(0, 10);
+      } else {
+        const norm = normalizeDob(effective_date);
+        effDate = norm || effective_date;
+      }
+
+      // Build vehicle description
+      const vehicleDescription = `${year} ${make} ${model}`;
+
+      // Build Asset Name (max 255)
+      let assetName = vehicleDescription;
+      if (vin) {
+        assetName += ` (VIN ${vin.slice(-6)})`;
+      }
+      assetName = assetName.slice(0, 255);
+
+      // Build YAML metadata block
+      const metaLines = [
+        'vehicle_metadata:',
+        `  vin: ${vin || 'pending'}`,
+        `  year: ${year}`,
+        `  make: ${make}`,
+        `  model: ${model}`,
+        `  usage_type: ${usage_type}`,
+        `  annual_mileage: ${annual_mileage}`,
+        `  garaged_zip: ${garaged_zip || 'not provided'}`,
+        `  coverage_template: ${coverage_template}`,
+        `  effective_date: ${effDate}`,
+        `  added_by: jessie-autonomous`,
+        `  status: active`,
+        '',
+      ];
+      const description = metaLines.join('\n') + (agent_notes ? `Agent notes:\n${agent_notes}\n` : '');
+
+      // Create Asset
+      const payload = {
+        Name: assetName,
+        AccountId: accountId,
+        ContactId: contact_id,
+        Description: description,
+        Status: 'Installed',
+        PurchaseDate: effDate,
+        InstallDate: effDate,
+      };
+
+      try {
+        const result = await sf.createRecord('Asset', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            asset_id: '',
+            asset_name: assetName,
+            vehicle_description: vehicleDescription,
+            effective_date: effDate,
+            account_id: accountId,
+            asset_url: '',
+            next_steps: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        return {
+          success: true,
+          asset_id: newId,
+          asset_name: assetName,
+          vehicle_description: vehicleDescription,
+          effective_date: effDate,
+          account_id: accountId,
+          asset_url: lightningUrl('Asset', newId),
+          next_steps: `Vehicle effective ${effDate}. Proof of insurance can be sent via send_insurance_proof.`,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          asset_id: '',
+          asset_name: assetName,
+          vehicle_description: vehicleDescription,
+          effective_date: effDate,
+          account_id: accountId,
+          asset_url: '',
+          next_steps: '',
+          errors: [e.message || String(e)],
+        };
+      }
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 7. send_insurance_proof — Send proof-of-insurance notification
+  // ----------------------------------------------------------
+  send_insurance_proof: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('Salesforce Contact ID'),
+      channel: z
+        .string()
+        .describe('Delivery channel: email or sms'),
+      recipient: z
+        .string()
+        .default('')
+        .describe("Email address or phone number; defaults to contact's primary."),
+      vehicles_included: z
+        .string()
+        .default('')
+        .describe("Comma-separated list of vehicles covered, e.g. '2024 Honda CR-V, 2021 Toyota Camry'. Empty for all on policy."),
+      purpose: z
+        .string()
+        .default('')
+        .describe('Why proof is needed: DMV registration, lien holder, employer, etc.'),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      case_id: z.string(),
+      case_number: z.string(),
+      channel: z.string(),
+      recipient_used: z.string(),
+      case_url: z.string(),
+      message: z.string(),
+      errors: z.array(z.string()),
+    }),
+    handler: async ({
+      contact_id,
+      channel,
+      recipient = '',
+      vehicles_included = '',
+      purpose = '',
+    }) => {
+      if (!contact_id) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          channel,
+          recipient_used: '',
+          case_url: '',
+          message: '',
+          errors: ['contact_id is required'],
+        };
+      }
+
+      // Look up contact and account
+      let accountId = '';
+      let recipientUsed = recipient;
+      try {
+        const contactRec = await sf.getRecord('Contact', contact_id);
+        accountId = s(contactRec, 'AccountId');
+        if (!recipientUsed) {
+          if (channel === 'email') {
+            recipientUsed = s(contactRec, 'Email');
+          } else if (channel === 'sms') {
+            recipientUsed = s(contactRec, 'MobilePhone') || s(contactRec, 'Phone');
+          }
+        }
+        if (!recipientUsed) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            channel,
+            recipient_used: '',
+            case_url: '',
+            message: '',
+            errors: [`No ${channel} on file; collect recipient.`],
+          };
+        }
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          channel,
+          recipient_used: '',
+          case_url: '',
+          message: '',
+          errors: [`Contact ${contact_id} not found: ${e.message}`],
+        };
+      }
+
+      // Build YAML metadata block
+      const metaLines = [
+        'notification_metadata:',
+        `  channel: ${channel}`,
+        `  recipient: ${recipientUsed}`,
+        `  vehicles_included: ${vehicles_included || 'all on policy'}`,
+        `  purpose: ${purpose || 'not specified'}`,
+        `  sent_by: jessie-autonomous`,
+        `  sent_at: ${new Date().toISOString()}`,
+        `  delivery_status: queued`,
+        '',
+      ];
+      const description = metaLines.join('\n');
+
+      // Create Case
+      const subject = `[NOTIFICATION] Insurance Proof — ${channel} — ${recipientUsed}`.slice(0, 255);
+      const payload = {
+        Subject: subject,
+        Status: 'Closed',
+        Priority: 'Low',
+        Origin: 'Phone',
+        Type: 'Question',
+        ContactId: contact_id,
+        Description: description,
+      };
+      if (accountId) payload.AccountId = accountId;
+
+      try {
+        const result = await sf.createRecord('Case', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            channel,
+            recipient_used: recipientUsed,
+            case_url: '',
+            message: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        const caseRecord = await sf.getRecord('Case', newId, ['CaseNumber']);
+        return {
+          success: true,
+          case_id: newId,
+          case_number: s(caseRecord, 'CaseNumber'),
+          channel,
+          recipient_used: recipientUsed,
+          case_url: lightningUrl('Case', newId),
+          message: `Proof of insurance sent via ${channel} to ${recipientUsed}.`,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          channel,
+          recipient_used: recipientUsed,
+          case_url: '',
+          message: '',
+          errors: [e.message || String(e)],
+        };
+      }
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 8. send_confirmation — Generic confirmation message
+  // ----------------------------------------------------------
+  send_confirmation: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('Salesforce Contact ID'),
+      channel: z
+        .string()
+        .describe('Delivery channel: email or sms'),
+      recipient: z
+        .string()
+        .default('')
+        .describe("Email address or phone number; defaults to contact's primary."),
+      confirmation_type: z
+        .string()
+        .describe("What's being confirmed: vehicle_added, claim_filed, appointment_scheduled, callback_scheduled, policy_change"),
+      reference_id: z
+        .string()
+        .default('')
+        .describe('Related record: claim number, case number, asset name, etc.'),
+      summary: z
+        .string()
+        .describe('One-paragraph human-readable confirmation text.'),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      case_id: z.string(),
+      case_number: z.string(),
+      channel: z.string(),
+      recipient_used: z.string(),
+      confirmation_type: z.string(),
+      reference_id: z.string(),
+      case_url: z.string(),
+      message: z.string(),
+      errors: z.array(z.string()),
+    }),
+    handler: async ({
+      contact_id,
+      channel,
+      recipient = '',
+      confirmation_type,
+      reference_id = '',
+      summary,
+    }) => {
+      if (!contact_id) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          channel,
+          recipient_used: '',
+          confirmation_type,
+          reference_id,
+          case_url: '',
+          message: '',
+          errors: ['contact_id is required'],
+        };
+      }
+
+      // Look up contact and account
+      let accountId = '';
+      let recipientUsed = recipient;
+      try {
+        const contactRec = await sf.getRecord('Contact', contact_id);
+        accountId = s(contactRec, 'AccountId');
+        if (!recipientUsed) {
+          if (channel === 'email') {
+            recipientUsed = s(contactRec, 'Email');
+          } else if (channel === 'sms') {
+            recipientUsed = s(contactRec, 'MobilePhone') || s(contactRec, 'Phone');
+          }
+        }
+        if (!recipientUsed) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            channel,
+            recipient_used: '',
+            confirmation_type,
+            reference_id,
+            case_url: '',
+            message: '',
+            errors: [`No ${channel} on file; collect recipient.`],
+          };
+        }
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          channel,
+          recipient_used: '',
+          confirmation_type,
+          reference_id,
+          case_url: '',
+          message: '',
+          errors: [`Contact ${contact_id} not found: ${e.message}`],
+        };
+      }
+
+      // Build YAML metadata block
+      const metaLines = [
+        'notification_metadata:',
+        `  channel: ${channel}`,
+        `  recipient: ${recipientUsed}`,
+        `  confirmation_type: ${confirmation_type}`,
+        `  reference_id: ${reference_id || 'none'}`,
+        `  summary: ${summary}`,
+        `  sent_by: jessie-autonomous`,
+        `  sent_at: ${new Date().toISOString()}`,
+        `  delivery_status: queued`,
+        '',
+      ];
+      const description = metaLines.join('\n');
+
+      // Create Case
+      const subject = `[NOTIFICATION] ${confirmation_type} — ${reference_id}`.slice(0, 255);
+      const payload = {
+        Subject: subject,
+        Status: 'Closed',
+        Priority: 'Low',
+        Origin: 'Phone',
+        Type: 'Question',
+        ContactId: contact_id,
+        Description: description,
+      };
+      if (accountId) payload.AccountId = accountId;
+
+      try {
+        const result = await sf.createRecord('Case', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            channel,
+            recipient_used: recipientUsed,
+            confirmation_type,
+            reference_id,
+            case_url: '',
+            message: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        const caseRecord = await sf.getRecord('Case', newId, ['CaseNumber']);
+        return {
+          success: true,
+          case_id: newId,
+          case_number: s(caseRecord, 'CaseNumber'),
+          channel,
+          recipient_used: recipientUsed,
+          confirmation_type,
+          reference_id,
+          case_url: lightningUrl('Case', newId),
+          message: `Confirmation sent via ${channel} to ${recipientUsed}.`,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          channel,
+          recipient_used: recipientUsed,
+          confirmation_type,
+          reference_id,
+          case_url: '',
+          message: '',
+          errors: [e.message || String(e)],
+        };
+      }
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 9. schedule_glass_repair — Book windshield repair appointment
+  // ----------------------------------------------------------
+  schedule_glass_repair: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('Salesforce Contact ID'),
+      claim_case_id: z
+        .string()
+        .default('')
+        .describe('Case ID of the FNOL claim this appointment is for'),
+      claim_number: z
+        .string()
+        .default('')
+        .describe('Synthetic claim number from start_claim_fnol'),
+      vehicle: z
+        .string()
+        .describe("Vehicle being repaired, e.g. '2021 Toyota Camry'"),
+      vendor: z
+        .string()
+        .default('Safelite Mobile')
+        .describe("Repair vendor: 'Safelite Mobile', 'Safelite Shop', 'Local Glass Shop'"),
+      appointment_window: z
+        .string()
+        .describe("When tech will arrive, e.g. '2026-05-25 morning (8am-12pm)'"),
+      service_address: z
+        .string()
+        .describe('Where technician will perform the repair (home, work, etc.)'),
+      mobile_repair: z
+        .boolean()
+        .default(true)
+        .describe('True for mobile service (tech comes to customer); false for shop visit'),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      case_id: z.string(),
+      case_number: z.string(),
+      claim_number: z.string(),
+      vendor: z.string(),
+      appointment_window: z.string(),
+      case_url: z.string(),
+      message: z.string(),
+      errors: z.array(z.string()),
+    }),
+    handler: async ({
+      contact_id,
+      claim_case_id = '',
+      claim_number = '',
+      vehicle,
+      vendor = 'Safelite Mobile',
+      appointment_window,
+      service_address,
+      mobile_repair = true,
+    }) => {
+      if (!contact_id) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          claim_number,
+          vendor,
+          appointment_window,
+          case_url: '',
+          message: '',
+          errors: ['contact_id is required'],
+        };
+      }
+
+      // Look up account from contact
+      let accountId = '';
+      try {
+        const contactRec = await sf.getRecord('Contact', contact_id);
+        accountId = s(contactRec, 'AccountId');
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          claim_number,
+          vendor,
+          appointment_window,
+          case_url: '',
+          message: '',
+          errors: [`Contact ${contact_id} not found: ${e.message}`],
+        };
+      }
+
+      // Build YAML metadata block
+      const metaLines = [
+        'appointment_metadata:',
+        `  claim_case_id: ${claim_case_id || 'none'}`,
+        `  claim_number: ${claim_number || 'none'}`,
+        `  vehicle: ${vehicle}`,
+        `  vendor: ${vendor}`,
+        `  appointment_window: ${appointment_window}`,
+        `  service_address: ${service_address}`,
+        `  mobile_repair: ${mobile_repair ? 'yes' : 'no'}`,
+        `  scheduled_by: jessie-autonomous`,
+        `  scheduled_at: ${new Date().toISOString()}`,
+        '',
+      ];
+      const description = metaLines.join('\n');
+
+      // Create Case
+      const subject = `[REPAIR-APPT] ${vendor} — ${vehicle} — ${appointment_window}`.slice(0, 255);
+      const payload = {
+        Subject: subject,
+        Status: 'New',
+        Priority: 'Medium',
+        Origin: 'Phone',
+        Type: 'Question',
+        ContactId: contact_id,
+        Description: description,
+      };
+      if (accountId) payload.AccountId = accountId;
+
+      try {
+        const result = await sf.createRecord('Case', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            claim_number,
+            vendor,
+            appointment_window,
+            case_url: '',
+            message: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        const caseRecord = await sf.getRecord('Case', newId, ['CaseNumber']);
+        const msg = `Repair scheduled with ${vendor} for ${appointment_window}. ${
+          mobile_repair ? 'Mobile service at ' + service_address : 'Customer to visit shop'
+        }.`;
+        return {
+          success: true,
+          case_id: newId,
+          case_number: s(caseRecord, 'CaseNumber'),
+          claim_number,
+          vendor,
+          appointment_window,
+          case_url: lightningUrl('Case', newId),
+          message: msg,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          claim_number,
+          vendor,
+          appointment_window,
+          case_url: '',
+          message: '',
+          errors: [e.message || String(e)],
+        };
+      }
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 10. create_underwriting_referral — Flag for UW review
+  // ----------------------------------------------------------
+  create_underwriting_referral: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('Salesforce Contact ID'),
+      referral_type: z
+        .string()
+        .describe('What needs review: classic_vehicle, high_value, modified_vehicle, commercial_use, exotic, multi_driver_change, coverage_change'),
+      description: z
+        .string()
+        .describe('Plain-English description of what UW needs to look at'),
+      vehicle_or_subject: z
+        .string()
+        .default('')
+        .describe('Vehicle or policy element under review'),
+      urgency: z
+        .string()
+        .default('next_business_day')
+        .describe('next_business_day | same_day | urgent'),
+      agent_notes: z
+        .string()
+        .default('')
+        .describe('Free-form notes'),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      case_id: z.string(),
+      case_number: z.string(),
+      referral_id: z.string(),
+      urgency: z.string(),
+      case_url: z.string(),
+      message: z.string(),
+      errors: z.array(z.string()),
+    }),
+    handler: async ({
+      contact_id,
+      referral_type,
+      description,
+      vehicle_or_subject = '',
+      urgency = 'next_business_day',
+      agent_notes = '',
+    }) => {
+      if (!contact_id) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          referral_id: '',
+          urgency,
+          case_url: '',
+          message: '',
+          errors: ['contact_id is required'],
+        };
+      }
+
+      // Look up account from contact
+      let accountId = '';
+      try {
+        const contactRec = await sf.getRecord('Contact', contact_id);
+        accountId = s(contactRec, 'AccountId');
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          referral_id: '',
+          urgency,
+          case_url: '',
+          message: '',
+          errors: [`Contact ${contact_id} not found: ${e.message}`],
+        };
+      }
+
+      // Generate referral_id
+      const year = new Date().getUTCFullYear();
+      const suffix = String(Math.floor(Math.random() * 90000) + 10000);
+      const referralId = `UW-REF-${year}-${suffix}`;
+
+      // Build YAML metadata block
+      const metaLines = [
+        'referral_metadata:',
+        `  referral_id: ${referralId}`,
+        `  referral_type: ${referral_type}`,
+        `  description: ${description}`,
+        `  vehicle_or_subject: ${vehicle_or_subject || 'policy review'}`,
+        `  urgency: ${urgency}`,
+        `  created_by: jessie-autonomous`,
+        `  created_at: ${new Date().toISOString()}`,
+        `  status: pending_uw_review`,
+        '',
+      ];
+      const desc = metaLines.join('\n') + (agent_notes ? `Agent notes:\n${agent_notes}\n` : '');
+
+      // Create Case
+      const subject = `[UW-REFERRAL] ${referral_type} — ${vehicle_or_subject || 'policy review'}`.slice(0, 255);
+      const payload = {
+        Subject: subject,
+        Status: 'New',
+        Priority: urgency === 'urgent' ? 'High' : 'Medium',
+        Origin: 'Phone',
+        Type: 'Question',
+        ContactId: contact_id,
+        Description: desc,
+      };
+      if (accountId) payload.AccountId = accountId;
+
+      try {
+        const result = await sf.createRecord('Case', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            referral_id: referralId,
+            urgency,
+            case_url: '',
+            message: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        const caseRecord = await sf.getRecord('Case', newId, ['CaseNumber']);
+        return {
+          success: true,
+          case_id: newId,
+          case_number: s(caseRecord, 'CaseNumber'),
+          referral_id: referralId,
+          urgency,
+          case_url: lightningUrl('Case', newId),
+          message: `Underwriting referral ${referralId} created. Review SLA: ${urgency}.`,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          referral_id: referralId,
+          urgency,
+          case_url: '',
+          message: '',
+          errors: [e.message || String(e)],
+        };
+      }
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 11. transfer_to_human — Warm transfer with context
+  // ----------------------------------------------------------
+  transfer_to_human: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .default('')
+        .describe('Salesforce Contact ID — empty allowed if caller unidentified'),
+      transfer_reason: z
+        .string()
+        .describe('Why transferring: unverified_caller, out_of_scope_injury, out_of_scope_collision, coverage_change_request, complaint, quote_request, off_topic, queue_closed_alt_needed, other'),
+      queue_destination: z
+        .string()
+        .default('general')
+        .describe('Target queue: claims, billing, sales, retention, general, supervisor'),
+      transfer_summary: z
+        .string()
+        .describe('Plain-English context for the receiving agent: what was discussed, what was attempted, what the caller needs.'),
+      caller_sentiment: z
+        .string()
+        .default('neutral')
+        .describe('Caller mood: calm, frustrated, distressed, angry, neutral'),
+      verified: z
+        .boolean()
+        .default(false)
+        .describe('Was caller identity verified before transfer?'),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      case_id: z.string(),
+      case_number: z.string(),
+      queue_destination: z.string(),
+      transfer_id: z.string(),
+      case_url: z.string(),
+      message: z.string(),
+      errors: z.array(z.string()),
+    }),
+    handler: async ({
+      contact_id = '',
+      transfer_reason,
+      queue_destination = 'general',
+      transfer_summary,
+      caller_sentiment = 'neutral',
+      verified = false,
+    }) => {
+      // Generate transfer_id
+      const year = new Date().getUTCFullYear();
+      const suffix = String(Math.floor(Math.random() * 90000) + 10000);
+      const transferId = `XFER-${year}-${suffix}`;
+
+      // Look up account if contact_id provided
+      let accountId = '';
+      if (contact_id) {
+        try {
+          const contactRec = await sf.getRecord('Contact', contact_id);
+          accountId = s(contactRec, 'AccountId');
+        } catch (e) {
+          // Soft fail — continue without account
+        }
+      }
+
+      // Build YAML metadata block
+      const metaLines = [
+        'transfer_metadata:',
+        `  transfer_id: ${transferId}`,
+        `  transfer_reason: ${transfer_reason}`,
+        `  queue_destination: ${queue_destination}`,
+        `  caller_sentiment: ${caller_sentiment}`,
+        `  verified: ${verified ? 'yes' : 'no'}`,
+        `  transferred_by: jessie-autonomous`,
+        `  transferred_at: ${new Date().toISOString()}`,
+        `  transfer_summary: ${transfer_summary}`,
+        '',
+      ];
+      const description = metaLines.join('\n');
+
+      // Create Case
+      const subject = `[TRANSFER] → ${queue_destination} — ${transfer_reason}`.slice(0, 255);
+      const payload = {
+        Subject: subject,
+        Status: 'New',
+        Priority: (caller_sentiment === 'distressed' || caller_sentiment === 'angry') ? 'High' : 'Medium',
+        Origin: 'Phone',
+        Type: 'Question',
+        Description: description,
+      };
+      if (contact_id) payload.ContactId = contact_id;
+      if (accountId) payload.AccountId = accountId;
+
+      try {
+        const result = await sf.createRecord('Case', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            queue_destination,
+            transfer_id: transferId,
+            case_url: '',
+            message: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        const caseRecord = await sf.getRecord('Case', newId, ['CaseNumber']);
+        return {
+          success: true,
+          case_id: newId,
+          case_number: s(caseRecord, 'CaseNumber'),
+          queue_destination,
+          transfer_id: transferId,
+          case_url: lightningUrl('Case', newId),
+          message: `Transferred to ${queue_destination}. Transfer ID ${transferId}.`,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          queue_destination,
+          transfer_id: transferId,
+          case_url: '',
+          message: '',
+          errors: [e.message || String(e)],
+        };
+      }
+    },
+  },
+
+  // ----------------------------------------------------------
+  // 12. schedule_callback — Book callback for closed queue
+  // ----------------------------------------------------------
+  schedule_callback: {
+    schema: z.object({
+      contact_id: z
+        .string()
+        .describe('Salesforce Contact ID'),
+      callback_window: z
+        .string()
+        .describe("When to call back: e.g. '2026-05-26 9am-11am PT'"),
+      callback_number: z
+        .string()
+        .default('')
+        .describe("Best number; defaults to contact's mobile or phone"),
+      topic: z
+        .string()
+        .describe('Brief reason for callback'),
+      urgency: z
+        .string()
+        .default('normal')
+        .describe('normal | priority'),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      case_id: z.string(),
+      case_number: z.string(),
+      callback_window: z.string(),
+      callback_number_used: z.string(),
+      case_url: z.string(),
+      message: z.string(),
+      errors: z.array(z.string()),
+    }),
+    handler: async ({
+      contact_id,
+      callback_window,
+      callback_number = '',
+      topic,
+      urgency = 'normal',
+    }) => {
+      if (!contact_id) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          callback_window,
+          callback_number_used: '',
+          case_url: '',
+          message: '',
+          errors: ['contact_id is required'],
+        };
+      }
+
+      // Look up contact and account
+      let accountId = '';
+      let callbackNumberUsed = callback_number;
+      try {
+        const contactRec = await sf.getRecord('Contact', contact_id);
+        accountId = s(contactRec, 'AccountId');
+        if (!callbackNumberUsed) {
+          callbackNumberUsed = s(contactRec, 'MobilePhone') || s(contactRec, 'Phone');
+        }
+        if (!callbackNumberUsed) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            callback_window,
+            callback_number_used: '',
+            case_url: '',
+            message: '',
+            errors: ['No phone number on file; collect callback number.'],
+          };
+        }
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          callback_window,
+          callback_number_used: '',
+          case_url: '',
+          message: '',
+          errors: [`Contact ${contact_id} not found: ${e.message}`],
+        };
+      }
+
+      // Build YAML metadata block
+      const metaLines = [
+        'callback_metadata:',
+        `  callback_window: ${callback_window}`,
+        `  callback_number: ${callbackNumberUsed}`,
+        `  topic: ${topic}`,
+        `  urgency: ${urgency}`,
+        `  scheduled_by: jessie-autonomous`,
+        `  scheduled_at: ${new Date().toISOString()}`,
+        '',
+      ];
+      const description = metaLines.join('\n');
+
+      // Create Case
+      const subject = `[CALLBACK] ${callback_window} — ${topic}`.slice(0, 255);
+      const payload = {
+        Subject: subject,
+        Status: 'New',
+        Priority: urgency === 'priority' ? 'High' : 'Medium',
+        Origin: 'Phone',
+        Type: 'Question',
+        ContactId: contact_id,
+        Description: description,
+      };
+      if (accountId) payload.AccountId = accountId;
+
+      try {
+        const result = await sf.createRecord('Case', payload);
+        if (!result.success) {
+          return {
+            success: false,
+            case_id: '',
+            case_number: '',
+            callback_window,
+            callback_number_used: callbackNumberUsed,
+            case_url: '',
+            message: '',
+            errors: (result.errors || []).map((e) => String(e)),
+          };
+        }
+        const newId = result.id;
+        const caseRecord = await sf.getRecord('Case', newId, ['CaseNumber']);
+        return {
+          success: true,
+          case_id: newId,
+          case_number: s(caseRecord, 'CaseNumber'),
+          callback_window,
+          callback_number_used: callbackNumberUsed,
+          case_url: lightningUrl('Case', newId),
+          message: `Callback scheduled for ${callback_window} at ${callbackNumberUsed}.`,
+          errors: [],
+        };
+      } catch (e) {
+        return {
+          success: false,
+          case_id: '',
+          case_number: '',
+          callback_window,
+          callback_number_used: callbackNumberUsed,
+          case_url: '',
+          message: '',
+          errors: [e.message || String(e)],
+        };
+      }
+    },
+  },
 };
 
 // ============================================================
