@@ -20,11 +20,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROTO_ROOT = path.join(__dirname, "proto");
 const SERVING_PROTO = path.join(PROTO_ROOT, "com/cisco/wcc/ccai/v1/serving.proto");
 
-// Load proto package once at startup
+// Load proto package once at startup.
+// enums: Number so raw integers pass through as-is — required because the
+// InsightServing call uses insightType=5 which is an undocumented server-side
+// value not present in the proto enum (0-4). With enums: String, proto-loader
+// silently falls back to 0 (DEFAULT_TRANSCRIPTION) for unknown integers.
 const packageDef = protoLoader.loadSync(SERVING_PROTO, {
   keepCase: true,
   longs: String,
-  enums: String,
+  enums: Number,
   defaults: true,
   oneofs: true,
   includeDirs: [PROTO_ROOT],
@@ -42,22 +46,38 @@ function getStub(region) {
   return stubCache.get(region);
 }
 
+// ─── Enum value maps (numeric → string) ──────────────────────────────────────
+// With enums: Number, responses carry integers. Map them to the same strings
+// the Python sidecar produced so the browser-side JS is unchanged.
+const ROLE_MAP        = { 0: "IVR", 1: "CALLER", 2: "AGENT" };
+const INSIGHT_MAP     = {
+  0: "DEFAULT_TRANSCRIPTION",
+  1: "AGENT_ANSWERS",
+  2: "TRANSCRIPTION",
+  3: "VIRTUAL_AGENT",
+  4: "MESSAGE",
+};
+const CALL_INSIGHT_MAP = {
+  0: "CALL_INSIGHT_TYPE_UNSPECIFIED",
+  1: "VA_CALL_SUMMARY",
+};
+
 // ─── Response normalisation ───────────────────────────────────────────────────
 // Mirrors normalize_response() in serving_proxy.py
 
 function normalizeResponse(resp) {
-  const role        = resp.role        || "UNKNOWN";
-  const insightType = resp.insightType || "UNKNOWN";
+  const role        = ROLE_MAP[resp.role]        ?? `UNKNOWN(${resp.role})`;
+  const insightType = INSIGHT_MAP[resp.insightType] ?? `UNKNOWN(${resp.insightType})`;
 
   let text = "";
   const content = resp.responseContent;
   if (content) {
-    if (insightType === "VIRTUAL_AGENT" && content.virtualAgentResult) {
+    if (resp.insightType === 3 /* VIRTUAL_AGENT */ && content.virtualAgentResult) {
       text = content.virtualAgentResult.raw || "";
-    } else if (insightType === "TRANSCRIPTION" && content.recognitionResult) {
+    } else if (resp.insightType === 2 /* TRANSCRIPTION */ && content.recognitionResult) {
       const alts = content.recognitionResult.alternatives || [];
       text = alts[0]?.transcript || "";
-    } else if (insightType === "MESSAGE" && content.messageResult) {
+    } else if (resp.insightType === 4 /* MESSAGE */ && content.messageResult) {
       text = content.messageResult.content || "";
     } else if (content.rawContent) {
       text = content.rawContent;
@@ -135,7 +155,7 @@ export function fetchVATranscript({ taskId, orgId, token, region = "us1" }) {
       if (!resp) return;
       const n = normalizeResponse(resp);
       // Drop non-final intermediate transcription and empty-text entries
-      if (n.insightType === "TRANSCRIPTION" && !n.isFinal) return;
+      if (resp.insightType === 2 /* TRANSCRIPTION */ && !n.isFinal) return;
       if (!n.text) return;
       results.push(n);
     });
@@ -147,7 +167,7 @@ export function fetchVATranscript({ taskId, orgId, token, region = "us1" }) {
 
     call.on("end", () => {
       results.sort((a, b) => a.ts - b.ts);
-      // Return VA-only: filter out human AGENT turns
+      // Return VA-only: filter out human AGENT turns (role 2)
       resolve(results.filter((r) => r.role !== "AGENT"));
     });
   });
@@ -202,9 +222,9 @@ export function fetchVASummary({ taskId, orgId, token, region = "us1" }) {
               reject({ httpStatus: 500, message: "Invalid JSON in summary content" });
               return;
             }
-            resolve({
-              summary:         summaryData,
-              callInsightType: content.callInsightsResult.callInsightType || "CALL_INSIGHT_TYPE_UNSPECIFIED",
+              resolve({
+                summary:         summaryData,
+                callInsightType: CALL_INSIGHT_MAP[content.callInsightsResult.callInsightType] ?? `UNKNOWN(${content.callInsightsResult.callInsightType})`,
               raw: {
                 conversationId:  response.conversationId,
                 orgId:           response.orgId,
