@@ -75,3 +75,9 @@ services:
         value: ""
       - key: SF_API_VERSION
         value: ""
+
+      # ─── WxCC Journey Explorer (/journey) ──────────────────────────────────
+      # No environment variables required.
+      # Token is entered by the user in the Settings panel and stored in localStorage.
+      # The hub proxies /journey/api/* → https://api.wxcc-{region}.cisco.com
+      # with the Authorization header forwarded from the browser.

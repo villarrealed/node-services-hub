@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WxCC Journey Explorer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          surface: { DEFAULT: '#ffffff', muted: '#f7f7f7', subtle: '#ededed' },
+          ink: { DEFAULT: '#000000f2', muted: '#000000b3', subtle: '#00000099', disabled: '#00000066', inverse: '#fffffff2' },
+          accent: { DEFAULT: '#1170cf', hover: '#0353a8', pressed: '#063a75', text: '#0353a8' },
+          outline: { DEFAULT: '#00000033', input: '#00000080', strong: '#00000075' },
+          success: { DEFAULT: '#185e46', bg: '#cef5eb' },
+          warning: { DEFAULT: '#7d4705', bg: '#ffebc2' },
+          danger: { DEFAULT: '#ab0a15', bg: '#ffe8ea' },
+          info: { DEFAULT: '#0353a8', bg: '#dbf0ff' },
+          highlight: '#bfe3ff',
+        },
+        fontFamily: {
+          sans: ['Inter', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        },
+        fontSize: {
+          xs: ['12px', { lineHeight: '16px' }],
+          sm: ['14px', { lineHeight: '20px' }],
+          base: ['16px', { lineHeight: '24px' }],
+          lg: ['20px', { lineHeight: '28px' }],
+          xl: ['24px', { lineHeight: '32px' }],
+          '2xl': ['32px', { lineHeight: '40px' }],
+        },
+        boxShadow: {
+          'mds-1': '0 2px 8px rgba(0,0,0,0.10)',
+          'mds-2': '0 4px 16px rgba(0,0,0,0.12)',
+          'mds-3': '0 6px 24px rgba(0,0,0,0.15)',
+          'mds-4': '0 12px 48px rgba(0,0,0,0.18)',
+        },
+      }
+    }
+  }
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body class="bg-surface text-ink font-sans antialiased">
+
+<header class="border-b border-outline bg-surface shadow-mds-1">
+  <div class="max-w-7xl mx-auto h-14 px-6 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-8 h-8 rounded grid place-items-center bg-accent text-white text-sm font-medium shrink-0">W</div>
+      <div class="flex items-baseline gap-3 min-w-0">
+        <h1 class="text-lg font-medium text-accent truncate">WxCC Journey Explorer</h1>
+        <span class="text-xs text-ink-disabled shrink-0">v0</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 shrink-0">
+      <span id="connection-state" class="status-pill status-pill-neutral">disconnected</span>
+      <button id="open-settings" class="btn-ghost">Settings</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-6 space-y-5">
+
+  <!-- Search panel -->
+  <section id="search-panel" class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">Search interactions</h2>
+    </div>
+    <form id="search-form" class="grid grid-cols-1 md:grid-cols-6 gap-3">
+      <label class="text-sm">
+        <span class="field-label">From</span>
+        <input type="datetime-local" name="from" required class="field-control w-full" />
+      </label>
+      <label class="text-sm">
+        <span class="field-label">To</span>
+        <input type="datetime-local" name="to" required class="field-control w-full" />
+      </label>
+      <label class="text-sm">
+        <span class="field-label">Field</span>
+        <select name="field" class="field-control w-full">
+          <option value="origin">Origin (caller / ANI)</option>
+          <option value="destination">Destination (dialed / DNIS)</option>
+          <option value="customerEmail">Customer email</option>
+          <option value="agentName">Agent name</option>
+        </select>
+      </label>
+      <label class="text-sm">
+         <span class="field-label">Match</span>
+         <select name="matchMode" class="field-control w-full">
+           <option value="equals">Exact</option>
+           <option value="contains">Contains</option>
+           <option value="match">Pattern</option>
+         </select>
+       </label>
+       <label class="text-sm md:col-span-1">
+         <span class="field-label">Value</span>
+         <input type="text" name="value" placeholder="+15555551234" class="field-control w-full" />
+       </label>
+      <div class="flex items-end">
+        <button type="submit" class="btn-primary w-full">Search</button>
+      </div>
+    </form>
+    <p id="search-hint" class="field-help mt-3">Tip: CAR (activity) data is retained ~30 days. CSR headers go back ~365 days.</p>
+  </section>
+
+  <!-- Results panel -->
+  <section id="results-panel" class="panel hidden">
+    <div class="panel-header panel-header-row">
+      <h2 class="panel-title">Results <span id="results-count" class="panel-title-meta"></span></h2>
+      <button id="export-results" class="btn-secondary">Export JSON</button>
+    </div>
+    <div class="table-shell overflow-y-auto max-h-[22rem]">
+      <table class="results-table w-full text-sm">
+        <thead>
+          <tr>
+            <th class="py-2 pr-3">Time</th>
+            <th class="py-2 pr-2 w-8"></th>
+            <th class="py-2 pr-2 w-8"></th>
+            <th class="py-2 pr-3 font-mono">Origin → Destination</th>
+            <th class="py-2 pr-3">Routing</th>
+            <th class="py-2 pr-3 text-right">Duration</th>
+            <th class="py-2 pr-3" title="📄 Transcription · 🎤 Recording · ✨ AI summary · ⭐ CSAT · 🙂 Sentiment · ↔ Transfer">Status <span class="text-ink-disabled cursor-help">(?)</span></th>
+            <th class="py-2 pr-3" title="✓ Handled · 📵 Customer left · ✕ Error/abandoned">Term <span class="text-ink-disabled cursor-help">(?)</span></th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+    <p id="results-empty" class="hidden table-empty-state">No interactions matched.</p>
+  </section>
+
+  <!-- Customer Context panel (JDS profile + history) -->
+  <section id="customer-panel" class="panel hidden">
+    <div class="panel-header">
+      <h2 class="panel-title">Customer</h2>
+    </div>
+    <div id="customer-content"></div>
+  </section>
+
+  <!-- Recordings & Transcripts panel -->
+  <section id="recordings-panel" class="panel hidden">
+    <div class="panel-header">
+      <h2 class="panel-title">Recordings &amp; Transcripts</h2>
+    </div>
+    <div id="recordings-content"></div>
+  </section>
+
+  <!-- Journey panel with left/right split -->
+  <section id="journey-panel" class="panel hidden">
+    <div class="panel-header panel-header-row">
+      <h2 class="panel-title">Journey <span id="journey-task-id" class="panel-title-code"></span></h2>
+      <button id="close-journey" class="btn-secondary">Close</button>
+    </div>
+    <div class="journey-split-grid">
+      <!-- Left: Journey data -->
+      <div id="journey-left">
+        <div id="journey-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm"></div>
+        <div id="journey-content"></div>
+      </div>
+      <!-- Right: Timeline -->
+      <div id="journey-right">
+        <div class="timeline-header mb-3">
+          <h3 class="text-base font-medium text-ink">Timeline <span id="timeline-event-count" class="text-sm text-ink-muted"></span></h3>
+        </div>
+        <ol id="timeline-list" class="list-none ml-0 pl-0 space-y-1"></ol>
+      </div>
+    </div>
+  </section>
+
+  <p class="footer-note">Styled with Momentum Design</p>
+
+</main>
+
+<!-- Settings drawer -->
+<div id="settings-overlay" class="hidden fixed inset-0 bg-[#07101c66] z-40"></div>
+<aside id="settings-drawer" class="hidden fixed top-0 right-0 h-full w-full max-w-md bg-surface shadow-mds-4 z-50 p-5 overflow-y-auto border-l border-outline">
+  <div class="panel-header panel-header-row mb-4">
+    <h2 class="panel-title">Settings</h2>
+    <button id="close-settings" class="btn-ghost">Close</button>
+  </div>
+  <form id="settings-form" class="space-y-4 text-sm">
+    <label class="block">
+      <span class="field-label">Region</span>
+      <select name="region" class="field-control mt-1 w-full">
+        <option value="us1">US (us1)</option>
+        <option value="eu1">UK (eu1)</option>
+        <option value="eu2">EU Frankfurt (eu2)</option>
+        <option value="ca1">Canada (ca1)</option>
+        <option value="anz1">Australia / NZ (anz1)</option>
+        <option value="jp1">Japan (jp1)</option>
+        <option value="sg1">Singapore (sg1)</option>
+      </select>
+      <span class="field-help">Region is forwarded as a header to the hub proxy — no server restart needed.</span>
+    </label>
+    <label class="block">
+      <span class="field-label">Org ID</span>
+      <input name="orgId" type="text" placeholder="UUID from Control Hub" class="field-control mt-1 w-full font-mono" />
+    </label>
+    <label class="block">
+      <span class="field-label">Access token</span>
+      <textarea name="token" rows="3" placeholder="Paste your token from developer.webex.com" class="field-control mt-1 w-full font-mono text-xs"></textarea>
+      <span class="field-help">Stored in <code>localStorage</code>. Lasts ~12 hours.</span>
+    </label>
+    <label class="block">
+      <span class="field-label">CJDS Workspace ID</span>
+      <input name="workspaceId" type="text" placeholder="Optional: for Customer Context feature" class="field-control mt-1 w-full font-mono" />
+      <span class="field-help">Optional. Enables customer history timeline in journey panel.</span>
+    </label>
+    <div class="flex gap-2">
+      <button type="button" id="test-connection" class="btn-secondary flex-1">Test &amp; prefetch</button>
+      <button type="submit" class="btn-primary flex-1">Save</button>
+    </div>
+    <button type="button" id="clear-cache" class="btn-danger w-full">Clear all cache (IndexedDB)</button>
+    <div id="settings-status" class="field-help"></div>
+  </form>
+</aside>
+
+<!-- Toast region -->
+<div id="toast-region" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+<!-- App scripts (vanilla JS, ES modules) -->
+<script type="module">
+  import("./js/app.js?v=" + Date.now());
+</script>
+</body>
+</html>

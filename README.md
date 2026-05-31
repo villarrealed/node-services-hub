@@ -16,7 +16,8 @@ node-services-hub.onrender.com
 ├── /wxcc/*        → wxcc-config-mcp
 ├── /farmers/*     → farmers-insurance-mcp
 ├── /radd/*        → radd-mcp (Farmers RADD routing lookups)
-└── /tester/*      → mcp-tester (Interactive MCP testing UI)
+├── /tester/*      → mcp-tester (Interactive MCP testing UI)
+└── /journey/*     → wxcc-journey-explorer (WxCC interaction timeline UI)
 ```
 
 Each sub-app is vendored under `apps/<name>/` and exports an Express `Router` instead of calling `app.listen()` itself. The top-level `server.js` does the listening and `app.use("/<prefix>", subRouter)`.
@@ -41,6 +42,7 @@ npm run dev       # auto-reload on file changes
 | 6 | ✅ | Landing page with per-app status |
 | 7 | ✅ | `render.yaml` + deploy on paid Starter plan |
 | 8 | ✅ | Mount mcp-tester at `/tester` (Interactive MCP testing UI) |
+| 9 | ✅ | Mount wxcc-journey-explorer at `/journey` (WxCC interaction timeline UI) |
 
 ## Vendoring policy
 
@@ -89,6 +91,8 @@ Sub-apps are **copied** into `apps/`, not linked via submodules. The original re
 | _(none)_ | — | — | All data is hardcoded for demo purposes (Farmers Voice Advantage IVR) |
 | **MCP Tester** | | | |
 | _(none)_ | — | — | Static UI for testing MCP servers on this hub |
+| **WxCC Journey Explorer** | | | |
+| _(none)_ | — | — | Token entered by user in the UI Settings panel; stored in `localStorage`. No server-side secret. |
 
 ### Critical post-deploy step: Update OAuth callback URLs
 
@@ -138,6 +142,10 @@ curl -X POST https://node-services-hub.onrender.com/radd/mcp \
 # MCP Tester (Interactive MCP testing UI)
 curl https://node-services-hub.onrender.com/tester/health
 curl https://node-services-hub.onrender.com/tester/servers
+
+# WxCC Journey Explorer (no OAuth — user pastes personal access token in UI)
+curl https://node-services-hub.onrender.com/journey/health
+curl https://node-services-hub.onrender.com/journey/
 ```
 
 Expected results:
