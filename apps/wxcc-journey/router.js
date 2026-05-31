@@ -106,7 +106,15 @@ router.get("/s3/*", async (req, res) => {
 
 // ─── VA sidecar stubs (/serving/*) ───────────────────────────────────────────
 // The Python gRPC sidecar is a local-only component (not available on Render).
-// Return 503 so the browser's graceful-fail path triggers (shows N/A, not an error).
+// Return a graceful "no data" response so the UI shows "N/A" rather than an error.
+router.all("/serving/va-summary", (_req, res) => {
+  res.json({ summary: null, reason: "sidecar_unavailable" });
+});
+
+router.all("/serving/va-transcript", (_req, res) => {
+  res.json([]);
+});
+
 router.all("/serving/*", (_req, res) => {
   res.status(503).json({ error: "VA gRPC sidecar not available on this deployment" });
 });
