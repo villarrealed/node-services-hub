@@ -10,14 +10,18 @@ Render charges $7/mo per always-on Node service. Running N services on N paid pl
 
 ```
 node-services-hub.onrender.com
-├── /              → landing page (per-app links)
-├── /health        → hub health check
-├── /jds/*         → jds-web-manager
-├── /wxcc/*        → wxcc-config-mcp
-├── /farmers/*     → farmers-insurance-mcp
-├── /radd/*        → radd-mcp (Farmers RADD routing lookups)
-├── /tester/*      → mcp-tester (Interactive MCP testing UI)
-└── /journey/*     → wxcc-journey-explorer (WxCC interaction timeline UI)
+├── /                  → landing page (per-app links + live status)
+├── /health            → hub health check
+├── /_status           → all sub-apps health check (JSON)
+├── /jds/*             → jds-web-manager (JDS OAuth + REST proxy)
+├── /wxcc/*            → wxcc-config-mcp (WxCC config MCP server)
+├── /farmers/*         → farmers-insurance-mcp (demo MCP server)
+├── /radd/*            → radd-mcp (Farmers RADD routing lookups)
+├── /tester/*          → mcp-tester (interactive MCP testing UI)
+├── /farmers-va/*      → farmers-va (Voice Advantage Phase 2 demo API)
+├── /farmers-va-mcp/*  → farmers-va-mcp (Voice Advantage MCP server)
+├── /salesforce/*      → salesforce-mcp (Salesforce CRM MCP server)
+└── /journey/*         → wxcc-journey-explorer (WxCC interaction timeline UI)
 ```
 
 Each sub-app is vendored under `apps/<name>/` and exports an Express `Router` instead of calling `app.listen()` itself. The top-level `server.js` does the listening and `app.use("/<prefix>", subRouter)`.
@@ -42,7 +46,11 @@ npm run dev       # auto-reload on file changes
 | 6 | ✅ | Landing page with per-app status |
 | 7 | ✅ | `render.yaml` + deploy on paid Starter plan |
 | 8 | ✅ | Mount mcp-tester at `/tester` (Interactive MCP testing UI) |
-| 9 | ✅ | Mount wxcc-journey-explorer at `/journey` (WxCC interaction timeline UI) |
+| 9 | ✅ | Mount farmers-va at `/farmers-va` (Voice Advantage Phase 2 demo API) |
+| 10 | ✅ | Mount farmers-va-mcp at `/farmers-va-mcp` (Voice Advantage MCP server) |
+| 11 | ✅ | Mount salesforce-mcp at `/salesforce` (Salesforce CRM MCP server) |
+| 12 | ✅ | Mount wxcc-journey-explorer at `/journey` (WxCC interaction timeline UI) |
+| 13 | ✅ | Port Python gRPC sidecar to Node.js (`serving.js`) — VA transcript + wrap-up summary via `@grpc/grpc-js` |
 
 ## Vendoring policy
 
@@ -92,7 +100,7 @@ Sub-apps are **copied** into `apps/`, not linked via submodules. The original re
 | **MCP Tester** | | | |
 | _(none)_ | — | — | Static UI for testing MCP servers on this hub |
 | **WxCC Journey Explorer** | | | |
-| _(none)_ | — | — | Token entered by user in the UI Settings panel; stored in `localStorage`. No server-side secret. |
+| _(none)_ | — | — | Token entered by user in the UI Settings panel; stored in `localStorage`. No server-side secret. The hub proxies `/journey/api/*` → WxCC REST API and calls the WxCC gRPC Serving API directly for VA transcripts and wrap-up summaries. |
 
 ### Critical post-deploy step: Update OAuth callback URLs
 
@@ -143,27 +151,54 @@ curl -X POST https://node-services-hub.onrender.com/radd/mcp \
 curl https://node-services-hub.onrender.com/tester/health
 curl https://node-services-hub.onrender.com/tester/servers
 
+# Farmers VA Demo API
+curl https://node-services-hub.onrender.com/farmers-va/health
+
+# Farmers VA MCP
+curl https://node-services-hub.onrender.com/farmers-va-mcp/health
+
+# Salesforce MCP
+curl https://node-services-hub.onrender.com/salesforce/health
+
 # WxCC Journey Explorer (no OAuth — user pastes personal access token in UI)
 curl https://node-services-hub.onrender.com/journey/health
 curl https://node-services-hub.onrender.com/journey/
 ```
 
 Expected results:
-- `/health` → `{"ok": true, "version": "0.6.0", ...}`
+- `/health` → `{"ok": true, "version": "0.12.0", ...}`
 - `/_status` → `{"ok": true, "apps": [...]}`
 - All sub-app endpoints return JSON (not 404 or 500)
 
 ### Decommission old services
 
-**Only after verification**, delete the 3 old Render services to stop paying for them:
-
-1. `jds-web-manager` (was at `https://jds-web-manager.onrender.com`)
-2. `wxcc-config-mcp` (was at `https://wxcc-config-mcp.onrender.com`)
-3. `farmers-insurance-mcp` (was at `https://farmers-insurance-mcp.onrender.com`)
-
-**Before deleting**:
-- Confirm all OAuth flows work on the new URLs
-- Update any external links or bookmarks
-- Export logs if needed for historical reference
+The 3 original standalone services have already been decommissioned:
+- `jds-web-manager` → moved to `/jds`
+- `wxcc-config-mcp` → moved to `/wxcc`
+- `farmers-insurance-mcp` → moved to `/farmers`
 
 **Cost savings**: 3 services × $7/mo = $21/mo → 1 service × $7/mo = **$14/mo saved**.
+
+## WxCC Journey Explorer gRPC Serving
+
+`/journey` includes a Node.js port of the Python gRPC sidecar that was required locally. It calls Cisco's WxCC AI Serving API directly over gRPC — no separate Python service needed.
+
+**Implementation:** `apps/wxcc-journey/serving.js`
+
+| Endpoint | gRPC method | Description |
+|---|---|---|
+| `POST /journey/serving/va-transcript` | `StreamingInsightServing` (server-side streaming) | VA + IVR + caller transcript for a task |
+| `POST /journey/serving/va-summary` | `InsightServing` (unary) | VA wrap-up call summary |
+
+**Request body** (both endpoints):
+```json
+{ "taskId": "...", "orgId": "...", "token": "..." }
+```
+Token is forwarded from the browser — never stored server-side.
+
+**gRPC host:** `serving-api-streaming.wxcc-{region}.cisco.com:443` (TLS)
+
+Region is resolved from the `X-WxCC-Region` request header (default: `us1`).
+
+**Proto files:** `apps/wxcc-journey/proto/com/cisco/wcc/ccai/v1/`
+Loaded at runtime by `@grpc/proto-loader` — no compilation step required.
