@@ -1,0 +1,18 @@
+syntax = "proto3";
+package com.cisco.wcc.ccai.v1;
+option java_multiple_files = true;
+
+// CallInsightType enum - minimal set based on server reflection
+// The server's actual enum values may include more types
+enum CallInsightType {
+  CALL_INSIGHT_TYPE_UNSPECIFIED = 0;
+  VA_CALL_SUMMARY = 1;
+  // Additional types may exist - extend as discovered
+}
+
+// CallInsightsResult contains AI-generated call insights
+// content field is a JSON string with structured summary data
+message CallInsightsResult {
+  string content = 1;  // JSON string with summary fields
+  CallInsightType callInsightType = 2;
+}

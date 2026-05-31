@@ -16,13 +16,15 @@
  *                             Authorization header forwarded as-is from browser
  *   ALL  /journey/s3/*      — Proxy → S3 presigned recording/transcript URLs
  *                             Browser passes the S3 path after /s3/ (avoids S3 CORS)
- *   POST /journey/serving/* — Returns 503; Python gRPC sidecar not available on Render
+ *   POST /journey/serving/va-transcript — gRPC StreamingInsightServing → VA transcript array
+ *   POST /journey/serving/va-summary    — gRPC InsightServing → VA wrap-up summary
  *   GET  /journey/health    — Health check
  */
 
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { fetchVATranscript, fetchVASummary } from "./serving.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,19 +106,42 @@ router.get("/s3/*", async (req, res) => {
   }
 });
 
-// ─── VA sidecar stubs (/serving/*) ───────────────────────────────────────────
-// The Python gRPC sidecar is a local-only component (not available on Render).
-// Return a graceful "no data" response so the UI shows "N/A" rather than an error.
-router.all("/serving/va-summary", (_req, res) => {
-  res.json({ summary: null, reason: "sidecar_unavailable" });
+// ─── VA sidecar — gRPC serving endpoints ─────────────────────────────────────
+// These replace the Python sidecar. serving.js uses @grpc/grpc-js to call
+// serving-api-streaming.wxcc-{region}.cisco.com:443 directly from Node.
+
+router.post("/serving/va-transcript", async (req, res) => {
+  const { taskId, orgId, token } = req.body || {};
+  const region = (req.headers["x-wxcc-region"] || req.body?.region || "us1").replace(/[^a-z0-9]/gi, "");
+
+  if (!taskId || !orgId || !token) {
+    return res.status(400).json({ error: "Missing required fields: taskId, orgId, token" });
+  }
+
+  try {
+    const results = await fetchVATranscript({ taskId, orgId, token, region });
+    res.json(results);
+  } catch (err) {
+    console.error("[wxcc-journey] va-transcript gRPC error:", err);
+    res.status(err.httpStatus || 500).json({ error: err.message || "gRPC error" });
+  }
 });
 
-router.all("/serving/va-transcript", (_req, res) => {
-  res.json([]);
-});
+router.post("/serving/va-summary", async (req, res) => {
+  const { taskId, orgId, token } = req.body || {};
+  const region = (req.headers["x-wxcc-region"] || req.body?.region || "us1").replace(/[^a-z0-9]/gi, "");
 
-router.all("/serving/*", (_req, res) => {
-  res.status(503).json({ error: "VA gRPC sidecar not available on this deployment" });
+  if (!taskId || !orgId || !token) {
+    return res.status(400).json({ error: "Missing required fields: taskId, orgId, token" });
+  }
+
+  try {
+    const result = await fetchVASummary({ taskId, orgId, token, region });
+    res.json(result);
+  } catch (err) {
+    console.error("[wxcc-journey] va-summary gRPC error:", err);
+    res.status(err.httpStatus || 500).json({ error: err.message || "gRPC error" });
+  }
 });
 
 // ─── Serve index.html for root ────────────────────────────────────────────────
