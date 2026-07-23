@@ -11,6 +11,7 @@
  *   /wxcc/*       — wxcc-config-mcp (Step 3)
  *   /farmers/*    — farmers-insurance-mcp (Step 4)
  *   /radd/*       — radd-mcp (Step 6)
+ *   /farmers-ivr/* — farmers-ivr-mcp
  *   /tester/*     — mcp-tester (Step 7)
  *   /journey/*    — wxcc-journey-explorer (Step 9)
  *   /health       — top-level health check
@@ -28,6 +29,7 @@ import raddMcp from "./apps/radd-mcp/router.js";
 import testerRouter from "./apps/mcp-tester/router.js";
 import farmersVaRouter from "./apps/farmers-va/router.js";
 import farmersVaMcpRouter from "./apps/farmers-va-mcp/router.js";
+import farmersIvrMcpRouter from "./apps/farmers-ivr-mcp/router.js";
 import salesforceMcpRouter from "./apps/salesforce-mcp/router.js";
 import journeyRouter from "./apps/wxcc-journey/router.js";
 
@@ -52,6 +54,7 @@ const STATUS_APPS = [
   { prefix: "/tester", name: "mcp-tester", healthPath: "/tester/health" },
   { prefix: "/farmers-va", name: "farmers-va", healthPath: "/farmers-va/health" },
   { prefix: "/farmers-va-mcp", name: "farmers-va-mcp", healthPath: "/farmers-va-mcp/health" },
+  { prefix: "/farmers-ivr", name: "farmers-ivr-mcp", healthPath: "/farmers-ivr/health" },
   { prefix: "/salesforce", name: "salesforce-mcp", healthPath: "/salesforce/health" },
   { prefix: "/journey", name: "wxcc-journey", healthPath: "/journey/health" },
 ];
@@ -76,6 +79,9 @@ MOUNTED.push({ prefix: "/farmers-va", name: "farmers-va" });
 
 app.use("/farmers-va-mcp", farmersVaMcpRouter);
 MOUNTED.push({ prefix: "/farmers-va-mcp", name: "farmers-va-mcp" });
+
+app.use("/farmers-ivr", farmersIvrMcpRouter);
+MOUNTED.push({ prefix: "/farmers-ivr", name: "farmers-ivr-mcp" });
 
 app.use("/salesforce", salesforceMcpRouter);
 MOUNTED.push({ prefix: "/salesforce", name: "salesforce-mcp" });
