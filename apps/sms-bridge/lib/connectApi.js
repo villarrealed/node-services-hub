@@ -5,6 +5,16 @@
 // Simple REST Messaging API base URL turned out to be undiscoverable — see
 // ARCHITECTURE.md Decisions #3a for the full trade-off (this reintroduces a
 // flow-execution cost on outbound that the original design tried to avoid).
+
+// Webex Connect's API docs mark E.164 (+1XXXXXXXXXX) as required/recommended
+// for the `to` field. Upstream sources (e.g. the SMS trigger's
+// sms.senderNumber, which becomes the stored `from` and later the outbound
+// `to` on replies) don't reliably include the leading `+`.
+function toE164(number) {
+  const digits = String(number).replace(/\D/g, '');
+  return `+${digits}`;
+}
+
 export async function sendSms(toPhoneNumber, text) {
   const webhookUrl = process.env.WEBEX_CONNECT_OUTBOUND_WEBHOOK_URL;
   const from = process.env.WEBEX_CONNECT_FROM_NUMBER;
@@ -22,7 +32,7 @@ export async function sendSms(toPhoneNumber, text) {
   const res = await fetch(webhookUrl, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ from, to: toPhoneNumber, text }),
+    body: JSON.stringify({ from, to: toE164(toPhoneNumber), text }),
   });
 
   if (!res.ok) {
