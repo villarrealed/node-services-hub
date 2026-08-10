@@ -19,6 +19,16 @@ export async function createRoomForPhoneNumber(phoneNumber) {
   return room.id;
 }
 
+export async function findRoomByTitle(title) {
+  const res = await fetch(`${WEBEX_API}/rooms?max=100&type=group&sortBy=lastactivity`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`listRooms failed: ${res.status} ${await res.text()}`);
+  const { items } = await res.json();
+  const match = items.find((r) => r.title === title);
+  return match ? match.id : null;
+}
+
 export async function addMembership(roomId, personEmail) {
   const res = await fetch(`${WEBEX_API}/memberships`, {
     method: 'POST',

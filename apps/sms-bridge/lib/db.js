@@ -19,3 +19,9 @@ export async function saveMapping(phoneNumber, roomId) {
     redis.set(ROOM_PREFIX + roomId, phoneNumber),
   ]);
 }
+
+// Returns true if this call won the race and should proceed to create the room.
+export async function claimPhoneNumber(phoneNumber) {
+  const result = await redis.set(PHONE_PREFIX + phoneNumber, 'pending', { nx: true });
+  return result === 'OK';
+}
