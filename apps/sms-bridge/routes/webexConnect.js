@@ -19,10 +19,10 @@ router.post('/inbound', express.json(), async (req, res) => {
   }
 
   try {
-    let roomId = getRoomByPhone(from);
+    let roomId = await getRoomByPhone(from);
     if (!roomId) {
       roomId = await createRoomForPhoneNumber(from);
-      saveMapping(from, roomId);
+      await saveMapping(from, roomId);
     }
     await postMessage(roomId, text);
     res.status(204).end();

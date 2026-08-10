@@ -1,29 +1,21 @@
-import Database from 'better-sqlite3';
-import path from 'node:path';
-import fs from 'node:fs';
+import { Redis } from '@upstash/redis';
 
-const dbPath = process.env.DATABASE_PATH || './data/bridge.sqlite';
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const redis = Redis.fromEnv(); // reads UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
 
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
+const PHONE_PREFIX = 'sms-bridge:phone:';
+const ROOM_PREFIX = 'sms-bridge:room:';
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS sms_rooms (
-    phone_number TEXT PRIMARY KEY,
-    room_id TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-export function getRoomByPhone(phoneNumber) {
-  return db.prepare('SELECT room_id FROM sms_rooms WHERE phone_number = ?').get(phoneNumber)?.room_id ?? null;
+export async function getRoomByPhone(phoneNumber) {
+  return (await redis.get(PHONE_PREFIX + phoneNumber)) ?? null;
 }
 
-export function getPhoneByRoom(roomId) {
-  return db.prepare('SELECT phone_number FROM sms_rooms WHERE room_id = ?').get(roomId)?.phone_number ?? null;
+export async function getPhoneByRoom(roomId) {
+  return (await redis.get(ROOM_PREFIX + roomId)) ?? null;
 }
 
-export function saveMapping(phoneNumber, roomId) {
-  db.prepare('INSERT OR REPLACE INTO sms_rooms (phone_number, room_id) VALUES (?, ?)').run(phoneNumber, roomId);
+export async function saveMapping(phoneNumber, roomId) {
+  await Promise.all([
+    redis.set(PHONE_PREFIX + phoneNumber, roomId),
+    redis.set(ROOM_PREFIX + roomId, phoneNumber),
+  ]);
 }

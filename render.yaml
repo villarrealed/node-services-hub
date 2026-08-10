@@ -9,19 +9,14 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     branch: main
-    disks:
-      - name: sms-bridge-data
-        mountPath: /data
-        sizeGB: 1
     envVars:
       # ─── Hub-level configuration ───────────────────────────────────────────
       - key: BASE_URL
         value: https://node-services-hub.onrender.com
 
       # ─── Webex Connect SMS Bridge (/sms-bridge) ────────────────────────────
-      # SQLite DB (phone-number <-> Webex room mapping) persisted on the disk above.
-      - key: DATABASE_PATH
-        value: /data/bridge.sqlite
+      # Phone-number <-> Webex room mapping stored in the shared Upstash Redis
+      # instance below (UPSTASH_REDIS_REST_URL/TOKEN), key prefix "sms-bridge:".
       # Webex bot credentials + webhook signature secret
       - key: WEBEX_BOT_TOKEN
         sync: false

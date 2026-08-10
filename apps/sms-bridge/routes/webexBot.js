@@ -28,7 +28,7 @@ router.post(
       const message = await getMessage(messageId);
       if (message.personId === process.env.WEBEX_BOT_ID) return; // ignore the bot's own posts
 
-      const phoneNumber = getPhoneByRoom(roomId);
+      const phoneNumber = await getPhoneByRoom(roomId);
       if (!phoneNumber) return; // not an SMS-bridge room
 
       await sendSms(phoneNumber, message.text);
