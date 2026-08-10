@@ -1,6 +1,6 @@
 import express from 'express';
 import { getRoomByPhone, saveMapping } from '../lib/db.js';
-import { createRoomForPhoneNumber, postMessage } from '../lib/webexApi.js';
+import { createRoomForPhoneNumber, postMessage, addMembership } from '../lib/webexApi.js';
 import { verifyConnectSecret } from '../lib/verifySignature.js';
 
 const router = express.Router();
@@ -24,6 +24,9 @@ router.post('/inbound', express.json(), async (req, res) => {
       roomId = await createRoomForPhoneNumber(from);
       await saveMapping(from, roomId);
     }
+    // Every message, not just at creation — recovers a recipient who left the space.
+    const recipientEmail = process.env.SMS_RECIPIENT_EMAIL;
+    if (recipientEmail) await addMembership(roomId, recipientEmail);
     await postMessage(roomId, text);
     res.status(204).end();
   } catch (err) {

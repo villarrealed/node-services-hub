@@ -16,9 +16,6 @@ export async function createRoomForPhoneNumber(phoneNumber) {
   if (!res.ok) throw new Error(`createRoom failed: ${res.status} ${await res.text()}`);
   const room = await res.json();
 
-  const recipientEmail = process.env.SMS_RECIPIENT_EMAIL;
-  if (recipientEmail) await addMembership(room.id, recipientEmail);
-
   return room.id;
 }
 
@@ -28,6 +25,7 @@ export async function addMembership(roomId, personEmail) {
     headers: authHeaders(),
     body: JSON.stringify({ roomId, personEmail }),
   });
+  if (res.status === 409) return;
   if (!res.ok) throw new Error(`addMembership failed: ${res.status} ${await res.text()}`);
 }
 
