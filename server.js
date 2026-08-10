@@ -22,6 +22,7 @@ import cors from "cors";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import smsBridgeRouter from "./apps/sms-bridge/router.js";
 import jdsRouter from "./apps/jds-web-manager/router.js";
 import wxccRouter from "./apps/wxcc-config-mcp/router.js";
 import farmersRouter from "./apps/farmers-insurance-mcp/router.js";
@@ -39,14 +40,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, "public");
 
+// ─── sms-bridge MUST mount before the hub's global express.json() ───────────
+// Its /webhooks/webex/messages route needs the raw request body Buffer for
+// HMAC signature verification (express.raw()). If express.json() consumes the
+// body stream first, signature verification will always fail.
+app.use("/sms-bridge", smsBridgeRouter);
+const MOUNTED = [{ prefix: "/sms-bridge", name: "sms-bridge" }];
+
 // Hub-level middleware applied to ALL sub-apps.
 // JDS used cors() and express.json() in its standalone server; we install them once here.
 app.use(cors());
 app.use(express.json());
 
 // ─── Mount sub-apps ──────────────────────────────────────────────────────────
-const MOUNTED = [];
 const STATUS_APPS = [
+  { prefix: "/sms-bridge", name: "sms-bridge", healthPath: "/sms-bridge/healthz" },
   { prefix: "/jds", name: "jds-web-manager", healthPath: "/jds/auth/status" },
   { prefix: "/wxcc", name: "wxcc-config-mcp", healthPath: "/wxcc/health" },
   { prefix: "/farmers", name: "farmers-insurance-mcp", healthPath: "/farmers/health" },

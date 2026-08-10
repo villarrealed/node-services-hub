@@ -9,10 +9,38 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     branch: main
+    disks:
+      - name: sms-bridge-data
+        mountPath: /data
+        sizeGB: 1
     envVars:
       # ─── Hub-level configuration ───────────────────────────────────────────
       - key: BASE_URL
         value: https://node-services-hub.onrender.com
+
+      # ─── Webex Connect SMS Bridge (/sms-bridge) ────────────────────────────
+      # SQLite DB (phone-number <-> Webex room mapping) persisted on the disk above.
+      - key: DATABASE_PATH
+        value: /data/bridge.sqlite
+      # Webex bot credentials + webhook signature secret
+      - key: WEBEX_BOT_TOKEN
+        sync: false
+      - key: WEBEX_BOT_ID
+        sync: false
+      - key: WEBEX_WEBHOOK_SECRET
+        sync: false
+      # Email of the person to auto-add to each new SMS-bridge Webex room
+      - key: SMS_RECIPIENT_EMAIL
+        sync: false
+      # Webex Connect inbound shared-secret + outbound webhook config
+      - key: WEBEX_CONNECT_INBOUND_SECRET
+        sync: false
+      - key: WEBEX_CONNECT_OUTBOUND_WEBHOOK_URL
+        sync: false
+      - key: WEBEX_CONNECT_SERVICE_KEY
+        sync: false
+      - key: WEBEX_CONNECT_FROM_NUMBER
+        sync: false
       
       # ─── JDS Web Manager (/jds) ────────────────────────────────────────────
       # Webex OAuth credentials for JDS API access
