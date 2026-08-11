@@ -23,10 +23,15 @@ export async function sendSms(toPhoneNumber, text) {
   }
 
   const headers = { 'Content-Type': 'application/json' };
-  // Trigger's "Service key or JWT" auth option is enabled — same Service Key
-  // value confirmed working earlier against production Connect infrastructure.
+  // Trigger's "Service key or JWT" auth option is enabled. Confirmed via direct
+  // testing 2026-08-11: Webex Connect expects this in a header literally named
+  // `key` — NOT `Authorization`. An `Authorization` header (with or without a
+  // `Bearer` prefix) returns HTTP 200 with a *body-level* error
+  // ({"response":{"code":"7001","description":"Authentication failed."}}),
+  // which is why this was silently "succeeding" from this code's point of
+  // view while Connect's own flow transaction log showed zero invocations.
   if (process.env.WEBEX_CONNECT_SERVICE_KEY) {
-    headers.Authorization = process.env.WEBEX_CONNECT_SERVICE_KEY;
+    headers.key = process.env.WEBEX_CONNECT_SERVICE_KEY;
   }
 
   const res = await fetch(webhookUrl, {
@@ -35,7 +40,26 @@ export async function sendSms(toPhoneNumber, text) {
     body: JSON.stringify({ from, to: toE164(toPhoneNumber), text }),
   });
 
+  const bodyText = await res.text();
   if (!res.ok) {
-    throw new Error(`Webex Connect outbound webhook failed: ${res.status} ${await res.text()}`);
+    throw new Error(`Webex Connect outbound webhook failed: ${res.status} ${bodyText}`);
+  }
+
+  // Webex Connect returns HTTP 200 even on auth/validation failures — the
+  // actual result is in the response body's `response.code`. A successful
+  // queue looks like {"response":[{"code":"1002","description":"Queued",...}]}.
+  // Any other shape/code is treated as a failure so it surfaces as a real
+  // error instead of a false "success".
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    throw new Error(`Webex Connect outbound webhook returned non-JSON body: ${bodyText}`);
+  }
+  const responseField = parsed?.response;
+  const entries = Array.isArray(responseField) ? responseField : [responseField];
+  const failed = entries.find((entry) => entry?.code && entry.code !== '1002');
+  if (failed) {
+    throw new Error(`Webex Connect outbound webhook rejected the request: ${JSON.stringify(failed)}`);
   }
 }
