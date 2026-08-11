@@ -56,3 +56,16 @@ export async function getMessage(messageId) {
   if (!res.ok) throw new Error(`getMessage failed: ${res.status} ${await res.text()}`);
   return res.json();
 }
+
+let cachedBotDisplayName = null;
+
+export async function getBotDisplayName() {
+  if (cachedBotDisplayName) return cachedBotDisplayName;
+  const res = await fetch(`${WEBEX_API}/people/${process.env.WEBEX_BOT_ID}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`getBotDisplayName failed: ${res.status} ${await res.text()}`);
+  const person = await res.json();
+  cachedBotDisplayName = person.displayName;
+  return cachedBotDisplayName;
+}

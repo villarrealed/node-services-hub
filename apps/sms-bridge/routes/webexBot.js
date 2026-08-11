@@ -1,10 +1,17 @@
 import express from 'express';
 import { getPhoneByRoom } from '../lib/db.js';
-import { getMessage } from '../lib/webexApi.js';
+import { getMessage, getBotDisplayName } from '../lib/webexApi.js';
 import { sendSms } from '../lib/connectApi.js';
 import { verifyWebexSignature } from '../lib/verifySignature.js';
 
 const router = express.Router();
+
+function stripBotMention(text, botName) {
+  if (!text || !botName) return text;
+  const escaped = botName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^@?${escaped}\\s+`, 'i');
+  return text.replace(pattern, '');
+}
 
 // Webex `messages:created` webhook. Body only contains IDs, not message text —
 // the actual content is fetched via GET /v1/messages/{id}.
@@ -31,7 +38,15 @@ router.post(
       const phoneNumber = await getPhoneByRoom(roomId);
       if (!phoneNumber) return; // not an SMS-bridge room
 
-      await sendSms(phoneNumber, message.text);
+      let smsText = message.text;
+      try {
+        const botName = await getBotDisplayName();
+        smsText = stripBotMention(message.text, botName);
+      } catch (err) {
+        console.warn('failed to fetch bot display name, sending unstripped text', err);
+      }
+
+      await sendSms(phoneNumber, smsText);
     } catch (err) {
       console.error('outbound SMS handling failed', err);
     }
