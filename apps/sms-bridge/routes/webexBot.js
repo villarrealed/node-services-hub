@@ -1,16 +1,32 @@
 import express from 'express';
 import { getPhoneByRoom } from '../lib/db.js';
-import { getMessage, getBotDisplayName } from '../lib/webexApi.js';
+import { getMessage, getBotNames } from '../lib/webexApi.js';
 import { sendSms } from '../lib/connectApi.js';
 import { verifyWebexSignature } from '../lib/verifySignature.js';
 
 const router = express.Router();
 
-function stripBotMention(text, botName) {
-  if (!text || !botName) return text;
-  const escaped = botName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function stripLeadingName(text, name) {
+  if (!text || !name) return null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`^@?${escaped}\\s+`, 'i');
-  return text.replace(pattern, '');
+  return pattern.test(text) ? text.replace(pattern, '') : null;
+}
+
+// Webex renders an @mention in the plain `text` field using the mentioned
+// person's nickName, not displayName (confirmed 2026-08-11: nickName "SMS",
+// displayName "SMS Bridge" — real mentioned messages arrive as "SMS gotcha").
+// Try the LONGER name first: nickName is a prefix of displayName here, so
+// checking nickName first would partially match a full "SMS Bridge ..." text
+// and only strip "SMS ", leaving "Bridge ..." behind. Checking the longer
+// name first avoids that ambiguity regardless of which one Webex actually used.
+function stripBotMention(text, { nickName, displayName } = {}) {
+  const candidates = [displayName, nickName].filter(Boolean).sort((a, b) => b.length - a.length);
+  for (const name of candidates) {
+    const stripped = stripLeadingName(text, name);
+    if (stripped !== null) return stripped;
+  }
+  return text;
 }
 
 // Webex `messages:created` webhook. Body only contains IDs, not message text —
@@ -40,10 +56,10 @@ router.post(
 
       let smsText = message.text;
       try {
-        const botName = await getBotDisplayName();
-        smsText = stripBotMention(message.text, botName);
+        const botNames = await getBotNames();
+        smsText = stripBotMention(message.text, botNames);
       } catch (err) {
-        console.warn('failed to fetch bot display name, sending unstripped text', err);
+        console.warn('failed to fetch bot names, sending unstripped text', err);
       }
 
       await sendSms(phoneNumber, smsText);

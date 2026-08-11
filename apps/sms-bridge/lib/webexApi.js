@@ -57,15 +57,21 @@ export async function getMessage(messageId) {
   return res.json();
 }
 
-let cachedBotDisplayName = null;
+let cachedBotNames = null;
 
-export async function getBotDisplayName() {
-  if (cachedBotDisplayName) return cachedBotDisplayName;
+// Webex renders an @mention in a message's plain `text` field using the
+// person's `nickName`, not their `displayName` (confirmed via direct testing
+// 2026-08-11: bot displayName "SMS Bridge", nickName "SMS" — mentioned
+// messages arrived as text like "SMS gotcha", not "SMS Bridge gotcha").
+// Cache both so the mention-stripping logic can try nickName first (the
+// actual observed behavior) and fall back to displayName just in case.
+export async function getBotNames() {
+  if (cachedBotNames) return cachedBotNames;
   const res = await fetch(`${WEBEX_API}/people/${process.env.WEBEX_BOT_ID}`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(`getBotDisplayName failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(`getBotNames failed: ${res.status} ${await res.text()}`);
   const person = await res.json();
-  cachedBotDisplayName = person.displayName;
-  return cachedBotDisplayName;
+  cachedBotNames = { displayName: person.displayName, nickName: person.nickName };
+  return cachedBotNames;
 }
