@@ -1,8 +1,9 @@
 import express from 'express';
 import { getPhoneByRoom } from '../lib/db.js';
-import { getMessage, getBotNames } from '../lib/webexApi.js';
+import { getMessage, getBotNames, addMembership, postMessage } from '../lib/webexApi.js';
 import { sendSms } from '../lib/connectApi.js';
 import { verifyWebexSignature } from '../lib/verifySignature.js';
+import { resolveOrCreateRoomForPhone } from '../lib/roomResolver.js';
 
 const router = express.Router();
 
@@ -29,6 +30,39 @@ function stripBotMention(text, { nickName, displayName } = {}) {
   return text;
 }
 
+// `/newsms <phone number> <message text>` — starts a new SMS conversation from
+// a bot DM. Number and message are both required in the same command.
+const NEWSMS_COMMAND = /^\/newsms\s+([\d\s()+\-]+?)\s+([\s\S]+)$/i;
+
+// Normalizes user-typed phone number input to the bare-digit storage format
+// used elsewhere in this codebase (e.g. "16027991349" — digits only, no "+",
+// no spaces/dashes/parens, includes country code). Distinct from
+// connectApi.js's toE164, which formats a *stored* number for the outbound
+// Connect API call — different concern (parsing user input vs. formatting
+// for an external API), so intentionally not merged with that helper.
+function normalizePhoneForStorage(rawNumber) {
+  const digits = String(rawNumber).replace(/\D/g, '');
+  return digits.length === 10 ? `1${digits}` : digits;
+}
+
+async function handleNewSmsCommand(dmRoomId, rawNumber, initialText) {
+  const phoneNumber = normalizePhoneForStorage(rawNumber);
+  try {
+    const roomId = await resolveOrCreateRoomForPhone(phoneNumber);
+
+    const recipientEmail = process.env.SMS_RECIPIENT_EMAIL;
+    if (recipientEmail) await addMembership(roomId, recipientEmail);
+
+    await postMessage(roomId, initialText);
+    await sendSms(phoneNumber, initialText);
+
+    await postMessage(dmRoomId, `✅ Started SMS conversation with ${phoneNumber}`);
+  } catch (err) {
+    console.error('compose flow (/newsms) failed', err);
+    await postMessage(dmRoomId, `❌ Failed to start SMS conversation with ${phoneNumber}: ${err.message}`);
+  }
+}
+
 // Webex `messages:created` webhook. Body only contains IDs, not message text —
 // the actual content is fetched via GET /v1/messages/{id}.
 router.post(
@@ -50,6 +84,12 @@ router.post(
 
       const message = await getMessage(messageId);
       if (message.personId === process.env.WEBEX_BOT_ID) return; // ignore the bot's own posts
+
+      const commandMatch = message.text?.match(NEWSMS_COMMAND);
+      if (commandMatch) {
+        await handleNewSmsCommand(roomId, commandMatch[1], commandMatch[2]);
+        return;
+      }
 
       const phoneNumber = await getPhoneByRoom(roomId);
       if (!phoneNumber) return; // not an SMS-bridge room
